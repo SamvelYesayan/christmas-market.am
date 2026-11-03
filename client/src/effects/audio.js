@@ -66,8 +66,8 @@ class Engine {
       wet.gain.value = 0.28;
       this.musicBus.connect(this.master);
       this.musicBus.connect(this.reverb);
-      this.sfxBus.connect(this.master);
-      this.sfxBus.connect(this.reverb);
+      // Intro effects are switched on explicitly by the visitor, so they bypass the music volume/mute.
+      this.sfxBus.connect(this.ctx.destination);
       this.reverb.connect(wet).connect(this.master);
       this.master.connect(this.analyser).connect(this.ctx.destination);
       this.#applyVolume();
@@ -227,6 +227,32 @@ class Engine {
       const swell = Math.sin((i / (seconds * 6)) * Math.PI);
       this.jingle(t0 + i / 6 + (i % 2 ? 0.04 : 0), 0.4 + swell * 0.9, this.sfxBus);
     }
+  }
+
+  /** Fetch and decode a recorded sample once (e.g. the Santa laugh); resolves to null on failure. */
+  loadSample(url) {
+    this.samples ??= new Map();
+    if (!this.samples.has(url)) {
+      this.samples.set(url, (async () => {
+        if (!(await this.ensure())) return null;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return this.ctx.decodeAudioData(await res.arrayBuffer());
+      })().catch(() => null));
+    }
+    return this.samples.get(url);
+  }
+
+  /** Play a decoded sample on the effects bus. Returns the source node (or null). */
+  playSample(buffer, { gain = 1, when = 0 } = {}) {
+    if (!this.ctx || !buffer) return null;
+    const src = this.ctx.createBufferSource();
+    const g = this.ctx.createGain();
+    src.buffer = buffer;
+    g.gain.value = gain;
+    src.connect(g).connect(this.sfxBus);
+    src.start(this.ctx.currentTime + when);
+    return src;
   }
 
   // ───────── sequencer ─────────

@@ -23,7 +23,9 @@ orders, admin) told as a night-time winter village — with a personalised welco
   later visits, at most once per browser session and never on in-app navigation. «Բաց թողնել» skips it (Esc too).
   It is skipped for reduced-motion/calm mode and when landing directly on cart, checkout, orders or sign-in.
   Visitors can choose full / short / off in the footer or account settings. Sound (sleigh bells and a
-  "Ho! Ho! Ho!" via the browser's speech synthesis) only plays after the visitor presses «Միացնել ձայնը».
+  a real, human-recorded Santa "Ho ho ho" timed to the sleigh crossing) only plays after the visitor presses
+  «Միացնել ձայնը». The laugh is a CC0 studio recording by Joseph Sardin (BigSoundBank #2075); source and
+  licence are recorded in `client/public/audio/CREDITS.md`. No synthetic or AI-generated voice is used.
 - **Christmas music player** (nav, persistent across pages): play/pause, previous/next, mute, volume,
   playlist, live visualizer and automatic advance. It never autoplays: music starts only after a click
   («Միացնել ամանորյա երաժշտությունը»), and volume, mute and track are remembered.

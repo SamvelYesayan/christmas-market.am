@@ -6,6 +6,9 @@ import { useI18n } from '../i18n/index.jsx';
 import { audio } from './audio.js';
 import { Mountains, Village } from '../art/Scenes.jsx';
 
+// Real, human-recorded Santa laugh (CC0, BigSoundBank #2075 by Joseph Sardin) — see public/audio/CREDITS.md
+const SANTA_LAUGH = '/audio/santa-ho-ho-ho.wav';
+
 const DUR = { full: { night: 1.6, fly: 4.8, reveal: 1.5 }, short: { night: 0.5, fly: 2.8, reveal: 1.0 } };
 
 function Reindeer({ x, y = 0, back = false, lead = false, phase = 0 }) {
@@ -93,10 +96,18 @@ export default function SantaIntro({ variant = 'full', onDone }) {
   const doneRef = useRef(false);
   const soundRef = useRef(false);
   const sceneRef = useRef(1);
+  const laughRef = useRef(null); // decoded recording, loaded only once sound is switched on
+  const laughSrc = useRef(null);
+
+  const stopLaugh = () => {
+    try { laughSrc.current?.stop(); } catch { /* already finished */ }
+    laughSrc.current = null;
+  };
 
   const finish = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
+    stopLaugh();
     root.current?.classList.add('leaving');
     setTimeout(onDone, 650);
   }, [onDone]);
@@ -104,6 +115,7 @@ export default function SantaIntro({ variant = 'full', onDone }) {
   const enableSound = async () => {
     soundRef.current = true;
     setSound(true);
+    audio.loadSample(SANTA_LAUGH).then((b) => { laughRef.current = b; });
     await audio.sleighBells(3.5);
   };
 
@@ -169,17 +181,13 @@ export default function SantaIntro({ variant = 'full', onDone }) {
         for (let k = 0; k < (small ? 2 : 4); k++) {
           sparks.push({ x: rx + (Math.random() - 0.5) * 20, y: ry + (Math.random() - 0.5) * 12, vx: -1 - Math.random() * 2, vy: Math.random() * 0.8 - 0.2, life: 1, r: 1 + Math.random() * 2.5, c: Math.random() < 0.6 ? '#f2c46d' : '#fff6dc' });
         }
-        if (!said && flyU > 0.38) {
+        // The laugh starts as Santa enters the left third of the sky so the whole 2.8 s recording
+        // plays while he crosses the screen (earlier in the short variant, whose flight is quicker).
+        if (!said && flyU > (variant === 'short' ? 0.12 : 0.3)) {
           said = true;
           setHoho(true);
-          setTimeout(() => setHoho(false), 1600);
-          if (soundRef.current && 'speechSynthesis' in window) {
-            const u2 = new SpeechSynthesisUtterance('Ho! Ho! Ho!');
-            u2.pitch = 0.3;
-            u2.rate = 0.8;
-            u2.lang = 'en-US';
-            window.speechSynthesis.speak(u2);
-          }
+          setTimeout(() => setHoho(false), 2600);
+          if (soundRef.current && laughRef.current) laughSrc.current = audio.playSample(laughRef.current, { gain: 0.95 });
         }
       }
       for (let k = sparks.length - 1; k >= 0; k--) {
@@ -204,9 +212,9 @@ export default function SantaIntro({ variant = 'full', onDone }) {
     window.addEventListener('keydown', onKey);
     return () => {
       cancelAnimationFrame(raf);
+      stopLaugh();
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKey);
-      window.speechSynthesis?.cancel?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant, finish]);
