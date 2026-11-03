@@ -1,0 +1,20 @@
+{
+  "name": "christmas-market",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Magical Christmas — immersive Christmas e-commerce universe (christmas-market.am)",
+  "workspaces": ["server", "client"],
+  "scripts": {
+    "dev": "concurrently -n api,web -c red,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "db:migrate": "npm run migrate -w server",
+    "db:seed": "npm run seed -w server",
+    "db:seed:demo": "npm run seed:demo -w server",
+    "admin:create": "npm run admin:create -w server",
+    "test": "npm test -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -1,0 +1,15 @@
+# Local PostgreSQL for development: docker compose up -d
+# Then set DATABASE_URL=postgres://christmas:christmas@localhost:5433/christmas_market in server/.env
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: christmas
+      POSTGRES_PASSWORD: christmas
+      POSTGRES_DB: christmas_market
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:
