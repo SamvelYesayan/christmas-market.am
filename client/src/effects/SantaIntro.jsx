@@ -98,6 +98,19 @@ export default function SantaIntro({ variant = 'full', onDone }) {
   const sceneRef = useRef(1);
   const laughRef = useRef(null); // decoded recording, loaded only once sound is switched on
   const laughSrc = useRef(null);
+  const santaRef = useRef(null); // Santa's <g> inside the flying team, used to time the laugh to his position
+  const laughDue = useRef(false); // the sleigh has reached the laugh moment
+  const laughPlayed = useRef(false);
+
+  // Plays the recording once — at the laugh moment, or immediately if sound was switched on a bit late
+  // while Santa is still crossing (skipped once he is leaving the screen).
+  const tryLaugh = () => {
+    if (laughPlayed.current || doneRef.current || !soundRef.current || !laughRef.current || !laughDue.current) return;
+    const box = santaRef.current?.getBoundingClientRect();
+    if (!box || box.left + box.width / 2 > window.innerWidth * 0.55) return; // too late: he is already leaving
+    laughPlayed.current = true;
+    laughSrc.current = audio.playSample(laughRef.current, { gain: 0.95 });
+  };
 
   const stopLaugh = () => {
     try { laughSrc.current?.stop(); } catch { /* already finished */ }
@@ -115,7 +128,7 @@ export default function SantaIntro({ variant = 'full', onDone }) {
   const enableSound = async () => {
     soundRef.current = true;
     setSound(true);
-    audio.loadSample(SANTA_LAUGH).then((b) => { laughRef.current = b; });
+    audio.loadSample(SANTA_LAUGH).then((b) => { laughRef.current = b; tryLaugh(); });
     await audio.sleighBells(3.5);
   };
 
@@ -181,13 +194,20 @@ export default function SantaIntro({ variant = 'full', onDone }) {
         for (let k = 0; k < (small ? 2 : 4); k++) {
           sparks.push({ x: rx + (Math.random() - 0.5) * 20, y: ry + (Math.random() - 0.5) * 12, vx: -1 - Math.random() * 2, vy: Math.random() * 0.8 - 0.2, life: 1, r: 1 + Math.random() * 2.5, c: Math.random() < 0.6 ? '#f2c46d' : '#fff6dc' });
         }
-        // The laugh starts as Santa enters the left third of the sky so the whole 2.8 s recording
-        // plays while he crosses the screen (earlier in the short variant, whose flight is quicker).
-        if (!said && flyU > (variant === 'short' ? 0.12 : 0.3)) {
+        // The laugh starts the moment Santa himself enters the screen. The path scales with the viewport,
+        // so this is measured from his on-screen position, not a fixed point in the flight; flyU 0.5 is a fallback.
+        if (!said) {
+          santaRef.current ??= team.current.querySelector('.santa');
+          const box = santaRef.current?.getBoundingClientRect();
+          if (box ? box.left + box.width / 2 >= 0 : false) said = 'now';
+          else if (flyU > 0.5) said = 'now';
+        }
+        if (said === 'now') {
           said = true;
           setHoho(true);
           setTimeout(() => setHoho(false), 2600);
-          if (soundRef.current && laughRef.current) laughSrc.current = audio.playSample(laughRef.current, { gain: 0.95 });
+          laughDue.current = true;
+          tryLaugh();
         }
       }
       for (let k = sparks.length - 1; k >= 0; k--) {
