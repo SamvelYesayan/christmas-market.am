@@ -251,6 +251,85 @@ async function unlinkCard(userId, at, toast, done) {
   try { await api.post(`/admin/customers/${userId}/pioneer/unlink`, { reason: reason.trim() }); done(); } catch (e) { toast(e.message, { tone: 'error' }); }
 }
 
+/* ───────── Christmas Wishes (moderation) ───────── */
+const WISH_CATS = ['family', 'friends', 'love', 'health', 'success', 'peace', 'everyone'];
+const WISH_CAT_LABEL = { family: 'Family', friends: 'Friends', love: 'Love', health: 'Health', success: 'Success', peace: 'Peace', everyone: 'Everyone' };
+const WISH_TABS = [['pending', 'Pending'], ['approved', 'Published'], ['rejected', 'Rejected'], ['', 'All']];
+function WishEditor({ w, onSave, onCancel }) {
+  const at = useAt();
+  const [f, setF] = useState({ author_name: w.author_name, recipient_name: w.recipient_name ?? '', message: w.message, category: w.category ?? '' });
+  return (
+    <form className="wish-edit" onSubmit={(e) => { e.preventDefault(); onSave({ ...f, recipient_name: f.recipient_name || null, category: f.category || null }); }}>
+      <div className="row">
+        <label className="field"><span>{at('Author')}</span><input className="input" maxLength={60} value={f.author_name} onChange={(e) => setF({ ...f, author_name: e.target.value })} required /></label>
+        <label className="field"><span>{at('Recipient')}</span><input className="input" maxLength={60} value={f.recipient_name} onChange={(e) => setF({ ...f, recipient_name: e.target.value })} /></label>
+        <label className="field"><span>{at('Category')}</span><select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}><option value="">—</option>{WISH_CATS.map((c) => <option key={c} value={c}>{at(WISH_CAT_LABEL[c])}</option>)}</select></label>
+      </div>
+      <label className="field"><span>{at('Wish')} ({f.message.length}/400)</span><textarea className="input" rows={4} maxLength={400} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} required /></label>
+      <div className="row"><button className="btn btn-sm">{at('Save changes')}</button><button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>{at('Cancel')}</button></div>
+    </form>
+  );
+}
+function Wishes() {
+  const at = useAt();
+  const { toast } = useApp();
+  const [status, setStatus] = useState('pending');
+  const [category, setCategory] = useState('');
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [d, setD] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const load = () => api.get(`/admin/wishes${qs({ status, category, q, page })}`).then(setD).catch((e) => toast(e.message, { tone: 'error' }));
+  useEffect(() => { load(); }, [status, category, page]); // eslint-disable-line react-hooks/exhaustive-deps
+  const act = async (fn, msg) => { try { await fn(); if (msg) toast(msg); load(); } catch (e) { toast(e.message, { tone: 'error' }); } };
+  const setWishStatus = (w, s) => act(() => api.post(`/admin/wishes/${w.id}/status`, { status: s }), s === 'approved' ? at('Wish published.') : s === 'rejected' ? at('Wish rejected.') : null);
+  const pages = d ? Math.max(1, Math.ceil(d.total / d.pageSize)) : 1;
+  return (
+    <div className="admin-section">
+      <header className="admin-head"><h1>{at('Christmas Wishes')}</h1>
+        <div className="row">
+          <form onSubmit={(e) => { e.preventDefault(); setPage(1); load(); }}><input className="input" placeholder={at('Search author or recipient')} value={q} onChange={(e) => setQ(e.target.value)} /></form>
+          <select className="input" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} aria-label={at('Category')}>
+            <option value="">{at('All categories')}</option>{WISH_CATS.map((c) => <option key={c} value={c}>{at(WISH_CAT_LABEL[c])}</option>)}
+          </select>
+        </div>
+      </header>
+      <div className="row wish-tabs" role="tablist">
+        {WISH_TABS.map(([s, label]) => (
+          <button key={label} role="tab" aria-selected={status === s} className={`chip ${status === s ? 'on' : ''}`} onClick={() => { setStatus(s); setPage(1); }}>
+            {at(label)}{d && s ? <b className="wish-count">{d.counts[s]}</b> : null}
+          </button>
+        ))}
+      </div>
+      {!d ? <p className="muted">{at('Loading…')}</p> : d.items.length === 0 ? <p className="muted">{at('No wishes here.')}</p> : (
+        <ul className="wish-admin-list">
+          {d.items.map((w) => (
+            <li key={w.id} className={`admin-card wish-admin wish-${w.status}`}>
+              <div className="row between wish-meta">
+                <span><b>{w.author_name}</b>{w.recipient_name ? <> → <b>{w.recipient_name}</b></> : null}{w.category ? <span className="tag">{at(WISH_CAT_LABEL[w.category])}</span> : null}<span className="tag">{w.locale}</span></span>
+                <small className="muted">{new Date(w.created_at).toLocaleString()}{w.approved_at ? ` · ${at('published')} ${date(w.approved_at)}` : ''}{w.user_email ? ` · ${w.user_email}` : ''}</small>
+              </div>
+              {editing === w.id ? (
+                <WishEditor w={w} onCancel={() => setEditing(null)} onSave={(body) => act(async () => { await api.patch(`/admin/wishes/${w.id}`, body); setEditing(null); }, at('Saved.'))} />
+              ) : <p className="wish-admin-text">{w.message}</p>}
+              <div className="row wish-actions">
+                <span className={`wish-status s-${w.status}`}>{at(w.status === 'approved' ? 'Published' : w.status === 'rejected' ? 'Rejected' : 'Pending')}</span>
+                {w.status !== 'approved' && <button className="btn btn-sm btn-green" onClick={() => setWishStatus(w, 'approved')}>{at('Approve')}</button>}
+                {w.status !== 'rejected' && <button className="btn btn-ghost btn-sm" onClick={() => setWishStatus(w, 'rejected')}>{at('Reject')}</button>}
+                {editing !== w.id && <button className="btn btn-ghost btn-sm" onClick={() => setEditing(w.id)}>{at('Edit')}</button>}
+                <button className="btn btn-ghost btn-sm danger" onClick={() => { if (window.confirm(at('Delete this wish permanently?'))) act(() => api.del(`/admin/wishes/${w.id}`), at('Deleted.')); }}>{at('Delete')}</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {d && pages > 1 && (
+        <div className="row wish-pager"><button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>←</button><span className="muted">{page} / {pages}</span><button className="btn btn-ghost btn-sm" disabled={page >= pages} onClick={() => setPage(page + 1)}>→</button></div>
+      )}
+    </div>
+  );
+}
+
 /* ───────── Pioneer Card connections (read-only) ───────── */
 const EVENT_LABEL = { linked: 'Connected', relinked: 'Connected again', refreshed: 'Re-verified', unlinked: 'Disconnected by customer', admin_unlinked: 'Disconnected by staff', verify_failed: 'Wrong card or code', rejected_taken: 'Refused: card already connected' };
 function PioneerLinks() {
@@ -455,7 +534,7 @@ const NAV = [
   ['Catalog', [['products', 'Products'], ['categories', 'Categories'], ['reviews', 'Reviews']]],
   ['Promotions', [['coupons', 'Discount codes'], ['campaigns', 'Campaigns'], ['banners', 'Banners']]],
   ['Pioneer Card', [['pioneer-links', 'Card connections'], ['pioneer-offers', 'Member offers']]],
-  ['Website', [['content', 'Homepage texts'], ['events', 'Events'], ['newsletter', 'Newsletter']]],
+  ['Website', [['wishes', 'Christmas Wishes'], ['content', 'Homepage texts'], ['events', 'Events'], ['newsletter', 'Newsletter']]],
   ['Store settings', [['shipping-zones', 'Delivery']]],
   ['Christmas fun', [['advent', 'Advent calendar'], ['challenges', 'Daily challenges'], ['games', 'Mini-games'], ['reward-rules', 'Reward rules'], ['quiz', 'Quiz'], ['wheel', 'Wheel'], ['mystery', 'Mystery box'], ['hidden-objects', 'Hidden wonders']], { collapsible: true }],
 ];
@@ -506,6 +585,7 @@ export default function AdminApp() {
           <Route path="customers" element={<Customers />} />
           <Route path="customers/:id" element={<CustomerDetail />} />
           <Route path="pioneer-links" element={<PioneerLinks />} />
+          <Route path="wishes" element={<Wishes />} />
           <Route path=":entity" element={<CrudRoute />} />
         </Routes>
       </main>

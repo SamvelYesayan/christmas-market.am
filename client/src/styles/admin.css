@@ -90,3 +90,24 @@ details.admin-nav-group > summary::-webkit-details-marker { display: none; }
 details.admin-nav-group > summary::after { content: ' ▸'; }
 details.admin-nav-group[open] > summary::after { content: ' ▾'; }
 .admin-card .ok { color: #7fe0c4; }
+
+/* Christmas Wishes moderation */
+.wish-tabs { margin: 0 0 1rem; gap: 0.4rem; }
+.wish-count { margin-left: 0.45em; padding: 0 0.45em; border-radius: 10px; background: rgba(255,255,255,0.12); font-size: 0.78em; }
+.wish-admin-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.8rem; }
+.wish-admin { border-left: 3px solid var(--line); }
+.wish-admin.wish-pending { border-left-color: #f2c46d; }
+.wish-admin.wish-approved { border-left-color: #7fe0c4; }
+.wish-admin.wish-rejected { border-left-color: #e8384f; opacity: 0.8; }
+.wish-meta { gap: 0.6rem; flex-wrap: wrap; }
+.wish-meta .tag { margin-left: 0.5rem; }
+.wish-admin-text { white-space: pre-line; margin: 0.6rem 0; line-height: 1.55; }
+.wish-actions { gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.wish-status { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; margin-right: auto; }
+.wish-status.s-pending { color: #f2c46d; } .wish-status.s-approved { color: #7fe0c4; } .wish-status.s-rejected { color: #ff8a9a; }
+.wish-edit { display: grid; gap: 0.6rem; margin: 0.6rem 0; }
+.wish-edit .row { gap: 0.6rem; flex-wrap: wrap; }
+.wish-edit .field { display: grid; gap: 0.25rem; flex: 1 1 180px; }
+.wish-edit .field span { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+.wish-pager { justify-content: center; gap: 1rem; margin-top: 1rem; align-items: center; }
+.btn.danger { color: #ff8a9a; }

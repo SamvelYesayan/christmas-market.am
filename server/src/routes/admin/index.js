@@ -7,6 +7,7 @@ import orders from './orders.js';
 import customers from './customers.js';
 import analytics from './analytics.js';
 import pioneerLinks from './pioneer.js';
+import wishes from './wishes.js';
 
 const r = Router();
 r.use(requireRole('admin'));
@@ -20,6 +21,7 @@ r.use('/orders', orders);
 r.use('/customers', customers);
 r.use('/analytics', analytics);
 r.use('/pioneer-links', pioneerLinks);
+r.use('/wishes', wishes);
 
 r.use('/categories', crudRouter('categories', {
   pkType: 'int', orderBy: 'sort, name', search: ['name', 'slug'],

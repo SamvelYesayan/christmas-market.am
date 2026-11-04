@@ -31,4 +31,6 @@ export const gameLimiter = limiter(60_000, 40, 'Slow down, snow champion.');
 const pioneerPerAccount = limiter(15 * 60_000, 8, 'Too many card attempts. Please wait before trying again.', { keyGenerator: (req) => `user:${req.user?.id ?? req.ip}` });
 const pioneerPerIp = limiter(15 * 60_000, 30, 'Too many card attempts. Please wait before trying again.');
 export const pioneerLimiter = [pioneerPerIp, pioneerPerAccount];
+// Christmas wishes: a few per hour per visitor is plenty for a person, and keeps the moderation queue clean.
+export const wishLimiter = limiter(60 * 60_000, isProd ? 5 : 60, 'You have sent several wishes already — thank you! Please try again a little later.');
 export const writeLimiter = limiter(60_000, 30, 'Too many submissions. Please try again shortly.');

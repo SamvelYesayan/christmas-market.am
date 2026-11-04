@@ -23,6 +23,7 @@ import academyRoutes from './routes/academy.js';
 import adventRoutes from './routes/advent.js';
 import gamesRoutes from './routes/games.js';
 import contentRoutes from './routes/content.js';
+import wishesRoutes from './routes/wishes.js';
 import adminRoutes from './routes/admin/index.js';
 
 export function createApp() {
@@ -83,6 +84,7 @@ export function createApp() {
   api.use('/advent', adventRoutes);
   api.use('/', gamesRoutes);
   api.use('/', contentRoutes);
+  api.use('/', wishesRoutes);
   api.use('/admin', adminRoutes);
   api.use(notFoundHandler);
   app.use('/api/v1', api);

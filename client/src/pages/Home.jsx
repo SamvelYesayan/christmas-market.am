@@ -10,6 +10,7 @@ import { Mountains, Pines, Village } from '../art/Scenes.jsx';
 import { Chapter, GiftTag, Loader, Reveal, Ribbon } from '../components/Common.jsx';
 import { HiddenWonder } from '../components/Shell.jsx';
 import { useI18n } from '../i18n/index.jsx';
+import WishesWall from '../components/WishesWall.jsx';
 
 const Ornament3D = lazy(() => import('../effects/Ornament3D.jsx'));
 
@@ -295,6 +296,7 @@ export default function Home({ onReplayWelcome }) {
           {cats.data && <Stalls categories={cats.data.categories} title={ch.stalls?.title} body={ch.stalls?.body} />}
           <PopularGifts products={treeProducts.slice(0, 12)} limited={d.limited} />
           <Offers campaigns={d.campaigns} onSale={d.onSale} />
+          <WishesWall />
           <MoreMagic />
           <Reviews />
           <Events events={d.events} />
