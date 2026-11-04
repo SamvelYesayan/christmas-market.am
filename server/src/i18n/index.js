@@ -46,6 +46,7 @@ const HY = {
   'Too many card attempts. Please wait before trying again.': 'Չափազանց շատ փորձեր քարտով։ Խնդրում ենք սպասել և նորից փորձել։',
   'Too many submissions. Please try again shortly.': 'Չափազանց շատ հայտեր։ Խնդրում ենք փորձել քիչ անց։',
   'Something went wrong in the workshop.': 'Արհեստանոցում ինչ-որ բան սխալ գնաց։',
+  'The workshop database is temporarily unavailable. Please try again in a moment.': 'Արհեստանոցի տվյալների բազան ժամանակավորապես անհասանելի է։ Խնդրում ենք փորձել մի փոքր ուշ։',
   'Request too large.': 'Հարցումը չափազանց մեծ է։',
   'File too large (max 5 MB).': 'Ֆայլը չափազանց մեծ է (առավելագույնը՝ 5 ՄԲ)։',
   'That already exists.': 'Սա արդեն գոյություն ունի։',

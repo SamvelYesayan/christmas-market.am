@@ -2,6 +2,7 @@ import { HttpError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { isProd } from '../config.js';
 import { tr } from '../i18n/index.js';
+import { isDbUnavailable, dbTarget } from '../db.js';
 
 export function notFoundHandler(req, res) {
   res.status(404).json({ error: { code: 'not_found', message: `No route for ${req.method} ${req.path}` } });
@@ -16,6 +17,11 @@ export function errorHandler(err, req, res, _next) {
   if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: { code: 'too_large', message: tr(req.locale, 'File too large (max 5 MB).') } });
   if (err?.code === '23505') return res.status(409).json({ error: { code: 'duplicate', message: tr(req.locale, 'That already exists.') } });
   if (err?.code === '23503') return res.status(409).json({ error: { code: 'in_use', message: tr(req.locale, 'This item is referenced elsewhere.') } });
+  if (isDbUnavailable(err)) {
+    (req.log ?? logger).error({ code: err.code ?? err.errors?.[0]?.code, message: err.message }, `database unavailable (${dbTarget()})`);
+    res.set('Retry-After', '10');
+    return res.status(503).json({ error: { code: 'db_unavailable', message: tr(req.locale, 'The workshop database is temporarily unavailable. Please try again in a moment.') } });
+  }
   (req.log ?? logger).error({ err }, 'unhandled error');
   res.status(500).json({ error: { code: 'server_error', message: isProd ? tr(req.locale, 'Something went wrong in the workshop.') : err.message } });
 }
