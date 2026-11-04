@@ -272,17 +272,18 @@ function PioneerLinks() {
       </header>
       <div className="admin-grid">
         <section className="admin-card">
-          <h3>{at('Connection to the Pioneer system')}</h3>
+          <div className="row between"><h3>{at('Connection to the Pioneer system')}</h3><button className="btn btn-ghost btn-sm" onClick={async () => { try { await api.post('/admin/pioneer-links/check'); load(); } catch (e) { toast(e.message, { tone: 'error' }); } }}>{at('Check now')}</button></div>
           <ul className="plain">
             <li><span>{at('Status')}</span><b className={d.connection.available ? 'ok' : 'danger'}>{d.connection.available ? at('Connected') : at('Not configured')}</b></li>
             <li><span>{at('Pioneer system')}</span><b>{d.connection.baseUrl ?? '—'}</b></li>
+            <li><span>{at('API key check')}</span><b className={d.connection.health?.ok ? 'ok' : 'danger'}>{d.connection.health?.ok ? `${at('OK')} · ${d.connection.health.client}` : (d.connection.health?.code ?? '—')}</b></li>
             <li><span>{at('Connected cards')}</span><b>{d.stats.active}</b></li>
             <li><span>{at('Disconnected')}</span><b>{d.stats.disconnected}</b></li>
           </ul>
         </section>
         <section className="admin-card">
           <h3>{at('How points work')}</h3>
-          <p className="muted small">{at('Card owners, points and rewards live in the Pioneer system. This store only reads them after the customer verifies the card with its 3-digit code, so balances cannot be edited here. Adjust points in the Pioneer admin, where every change is recorded.')}</p>
+          <p className="muted small">{at('Card owners, points and rewards live in Magical. The store links a card only after Magical checks its number and 3-digit code, and only reads balances, history and rewards through the Magical Integration API — they cannot be edited here.')}</p>
         </section>
       </div>
       <div className="table-wrap"><table className="admin-table">

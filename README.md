@@ -78,8 +78,8 @@ Admin panel: http://localhost:5173/admin
 **Development switches in `server/.env`:**
 - `PAYMENTS_TEST_MODE=true` → a clearly labelled **TEST** payment method with an approve/decline page.
   Test orders are flagged `is_test`, show a TEST banner and are excluded from revenue analytics.
-- `PIONEER_MODE=magical` + `PIONEER_API_BASE_URL` + `PIONEER_SESSION_KEY` → connect to the real Magical Pioneer Card system.
-  For local testing run `magical-full` against a throwaway database (see the Pioneer integration README).
+- `MAGICAL_PIONEER_API_URL` + `MAGICAL_PIONEER_API_KEY` → connect to the official Magical Pioneer Card Integration API
+  (local Magical: `http://127.0.0.1:3000/api/integration/v1`; see the Pioneer integration README).
 - `ADVENT_DATE_OVERRIDE=2026-12-08` → pretend it is that date so December doors can be opened (ignored in production).
 
 ---
@@ -112,7 +112,7 @@ Everything is documented in [`server/.env.example`](server/.env.example). Key on
 | `TRUST_PROXY` | `1` behind one reverse proxy so rate limits see real IPs |
 | `PAYMENTS_TEST_MODE` | Enables the TEST payment method (forced off in production) |
 | `IDRAM_*`, `AMERIA_*`, `ARCA_*`, `STRIPE_*`, `TELCELL_*` | Payment provider credentials — a method appears at checkout only when configured |
-| `PIONEER_MODE`, `PIONEER_API_BASE_URL`, `PIONEER_SESSION_KEY`, `PIONEER_PORTAL_URL` | Magical Pioneer Card connection |
+| `MAGICAL_PIONEER_API_URL`, `MAGICAL_PIONEER_API_KEY`, `MAGICAL_PIONEER_TIMEOUT_MS`, `PIONEER_MODE` | Magical Pioneer Card Integration API (key is server-side only) |
 | `PIONEER_DISCOUNT_PERCENT` | Automatic member discount (default 5) |
 | `STORE_TIMEZONE` | Day boundaries for Advent, daily games and challenges (default Asia/Yerevan) |
 
@@ -137,11 +137,10 @@ cardholder name, masked number, live points balance, rewards, announcements and 
 connected to one account only; disconnecting asks for confirmation. Admins see connections (read-only) under
 **Pioneer Card → Card connections**; points can only be changed in the Pioneer admin.
 
-With `PIONEER_MODE=disabled` (default) the section shows "coming soon" — nothing is simulated.
-**Before going live** (details in the integration README): deploy the Pioneer module, exempt the store server from the
-Pioneer per-IP login limit (15 per 15 min / 60 per day), and set `PIONEER_MODE=magical`, `PIONEER_API_BASE_URL`
-(https) and `PIONEER_SESSION_KEY`. Stardust earned in the store stays in the store until the Pioneer system offers a
-credit endpoint.
+The store uses the official **Magical Pioneer Card Integration API v1** (`MAGICAL_PIONEER_API_URL`,
+`MAGICAL_PIONEER_API_KEY`); the key is checked with `GET /me` at startup. Without a key the section shows
+"coming soon" — nothing is simulated. API v1 cannot spend, earn or redeem points, so none of that happens in the store.
+Details: `server/src/integrations/pioneer/README.md`.
 
 ## 7. Tests
 With the API running against demo data (test mode + sandbox + an Advent date override in December):
@@ -165,7 +164,7 @@ NODE_ENV=production npm start      # serves /api, /uploads and the SPA
 ```
 Production checklist:
 - Run behind HTTPS (nginx/Caddy/Render/Fly) with `TRUST_PROXY=1`; cookies become `Secure` automatically.
-- `APP_ORIGIN` and `PUBLIC_API_URL` = your public https origin. `PAYMENTS_TEST_MODE=false`, `PIONEER_API_BASE_URL` uses https
+- `APP_ORIGIN` and `PUBLIC_API_URL` = your public https origin. `PAYMENTS_TEST_MODE=false`, `MAGICAL_PIONEER_API_URL` uses https
   (the server refuses to start with the sandbox in production).
 - Persist `server/uploads/` (or mount object storage there) — product photos live there.
 - Background jobs (expiring unpaid orders, Pioneer sync, session cleanup) run in-process; with multiple instances,
@@ -189,7 +188,7 @@ sensitive fields redacted from logs.
 
 ## 10. Known gaps / next steps
 - **Transactional email** (order confirmations, password reset) is not wired — add an SMTP/ESP provider.
-- **Pioneer Card production setup** — see §6 (Pioneer per-IP login limit, credit/redeem endpoints).
+- **Pioneer Card** — set `MAGICAL_PIONEER_API_KEY`; points spending/earning awaits a future Magical API version.
 - **Russian translation** — Armenian (default) and English are complete.
 - **Lottie** is not used (no licensed Lottie files); SVG/CSS/Canvas/Three.js cover the motion design.
 - Payment adapters need verification against each provider's sandbox before launch (see §5).

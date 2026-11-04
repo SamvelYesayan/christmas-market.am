@@ -31,15 +31,12 @@ const schema = z.object({
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
 
-  // Magical Pioneer Card
-  //   disabled → card connection unavailable (no simulation of any kind)
-  //   magical  → the real Magical Pioneer Card system (magical-full) at PIONEER_API_BASE_URL
-  PIONEER_MODE: z.enum(['disabled', 'magical']).default('disabled'),
-  PIONEER_API_BASE_URL: unsetIfEmpty(z.string().url().optional()),
-  PIONEER_PORTAL_URL: unsetIfEmpty(z.string().url().optional()), // where cardholders claim Pioneer rewards (default: {base}/pioneer-card)
-  PIONEER_API_TIMEOUT_MS: z.coerce.number().default(8000),
-  // 64 hex chars (32 bytes). Encrypts the Pioneer cardholder session stored per connected account.
-  PIONEER_SESSION_KEY: unsetIfEmpty(z.string().regex(/^[0-9a-fA-F]{64}$/, 'PIONEER_SESSION_KEY must be 64 hex characters').optional()),
+  // Magical Pioneer Card — official Integration API v1 (server-to-server; the key never reaches the browser).
+  // The integration is active when both URL and key are set; PIONEER_MODE=disabled switches it off explicitly.
+  PIONEER_MODE: z.enum(['auto', 'magical', 'disabled']).default('auto'),
+  MAGICAL_PIONEER_API_URL: unsetIfEmpty(z.string().url().optional()),
+  MAGICAL_PIONEER_API_KEY: unsetIfEmpty(z.string().min(20).optional()),
+  MAGICAL_PIONEER_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(10_000),
   PIONEER_DISCOUNT_PERCENT: z.coerce.number().min(0).max(50).default(5),
 
   // Advent calendar: override "today" for development/QA only (YYYY-MM-DD). Ignored in production.
@@ -56,11 +53,8 @@ if (!parsed.success) {
 export const config = parsed.data;
 export const isProd = config.NODE_ENV === 'production';
 
-if (config.PIONEER_MODE === 'magical') {
-  const missing = ['PIONEER_API_BASE_URL', 'PIONEER_SESSION_KEY'].filter((k) => !config[k]);
-  if (missing.length) console.error(`PIONEER_MODE=magical needs ${missing.join(' and ')} — the card connection stays disabled until they are set.`);
-  if (isProd && config.PIONEER_API_BASE_URL && !config.PIONEER_API_BASE_URL.startsWith('https://')) {
-    console.error('PIONEER_API_BASE_URL must use https:// in production (card verification codes are sent to it).');
-    process.exit(1);
-  }
+// Card numbers and CVVs are sent to Magical, so production must use https.
+if (isProd && config.MAGICAL_PIONEER_API_URL && !config.MAGICAL_PIONEER_API_URL.startsWith('https://')) {
+  console.error('MAGICAL_PIONEER_API_URL must use https:// in production.');
+  process.exit(1);
 }

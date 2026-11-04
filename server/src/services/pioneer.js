@@ -1,50 +1,59 @@
-// Pioneer Card links between store accounts and real Magical Pioneer Cards.
-// Ownership lives in pioneer_links (one ACTIVE link per card and per account, enforced by unique indexes);
-// points, owner name and rewards live in the Pioneer system and are only ever read from it.
-import crypto from 'node:crypto';
-import { config } from '../config.js';
-import { one, query } from '../db.js';
+// Pioneer Card links between store accounts and Magical Pioneer Cards (Integration API v1).
+// Magical owns the link (keyed by our customer id), the card, its balance, history and rewards.
+// pioneer_links is the store's local mirror, used for member pricing, the account header and the admin view.
+// It never holds a CVV, a full card number or any Magical credential.
+import { query } from '../db.js';
 import { pioneer } from '../integrations/pioneer/index.js';
 
-export const maskCard = (number) => (/^\d{8}$/.test(number ?? '') ? `•••• ${number.slice(4)}` : '••••');
+/** Local link reference: Magical identifies links by the store customer id, so that is what we keep. */
+export const linkRef = (userId) => `customer:${userId}`;
 
-const key = () => Buffer.from(config.PIONEER_SESSION_KEY, 'hex');
-
-/** Encrypts a Pioneer cardholder session token, bound to the account and card it belongs to. */
-export function sealSession(token, userId, cardNumber) {
-  const iv = crypto.randomBytes(12);
-  const c = crypto.createCipheriv('aes-256-gcm', key(), iv);
-  c.setAAD(Buffer.from(`pioneer-session:${userId}:${cardNumber}`));
-  const ct = Buffer.concat([c.update(token, 'utf8'), c.final()]);
-  return ['v1', iv.toString('base64url'), c.getAuthTag().toString('base64url'), ct.toString('base64url')].join('.');
-}
-
-/** Returns the session token, or null when missing, expired, tampered with or sealed with another key. */
-export function openSession(link) {
-  if (!link?.upstream_session || !link.upstream_session_expires_at || new Date(link.upstream_session_expires_at) <= new Date()) return null;
-  try {
-    const [v, iv, tag, ct] = link.upstream_session.split('.');
-    if (v !== 'v1') return null;
-    const d = crypto.createDecipheriv('aes-256-gcm', key(), Buffer.from(iv, 'base64url'));
-    d.setAAD(Buffer.from(`pioneer-session:${link.user_id}:${link.external_card_id}`));
-    d.setAuthTag(Buffer.from(tag, 'base64url'));
-    return Buffer.concat([d.update(Buffer.from(ct, 'base64url')), d.final()]).toString('utf8');
-  } catch {
-    return null;
-  }
-}
-
-/** The account's active link for the configured Pioneer system (links from other/older providers are ignored). */
+/** The account's active link for the configured Pioneer provider (older providers' rows are ignored history). */
 export const activeLink = (userId, db = { query }) =>
-  db.query(`SELECT * FROM pioneer_links WHERE user_id=$1 AND provider=$2 AND status='active' LIMIT 1`, [userId, pioneer.mode]).then((r) => r.rows[0] ?? null);
+  db.query(`SELECT * FROM pioneer_links WHERE user_id=$1 AND provider=$2 AND status='active' LIMIT 1`, [userId, pioneer.provider]).then((r) => r.rows[0] ?? null);
 
 export const logLinkEvent = (db, { userId, linkId = null, cardMasked = null, event, actorId = null, detail = null }) =>
   db.query(
     `INSERT INTO pioneer_link_events (user_id, link_id, provider, card_masked, event, actor_id, detail) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [userId, linkId, pioneer.mode, cardMasked, event, actorId, detail],
+    [userId, linkId, pioneer.provider, cardMasked, event, actorId, detail],
   );
 
-export const clearSession = (linkId) =>
-  query('UPDATE pioneer_links SET upstream_session=NULL, upstream_session_expires_at=NULL WHERE id=$1', [linkId]);
+/** Holder name as Magical returns it; unnamed cards ("Pioneer Member") have no holder. */
+export const holderOf = (card) => (card?.firstName || card?.lastName ? card.displayName ?? [card.firstName, card.lastName].filter(Boolean).join(' ') : null);
 
-export const findActiveLinkById = (id) => one(`SELECT * FROM pioneer_links WHERE id=$1 AND status='active'`, [id]);
+/** Records (or refreshes) the local mirror of an active Magical link. Returns the row. */
+export async function saveActiveLink(db, userId, magicalLink) {
+  const card = magicalLink.card ?? {};
+  const params = [userId, pioneer.provider, linkRef(userId), card.number ?? `•••• ${card.last4 ?? ''}`.trim(), holderOf(card),
+    card.memberSince ?? null, Number.isInteger(magicalLink.balance) ? magicalLink.balance : null, magicalLink.linkedAt ?? new Date().toISOString()];
+  const existing = await db.query(`SELECT id FROM pioneer_links WHERE user_id=$1 AND provider=$2 AND status='active' FOR UPDATE`, [userId, pioneer.provider]);
+  if (existing.rows[0]) {
+    const { rows: [row] } = await db.query(
+      `UPDATE pioneer_links SET card_masked=$2, holder_name=$3, member_since=$4, last_balance=COALESCE($5::int, last_balance),
+              balance_synced_at=CASE WHEN $5::int IS NULL THEN balance_synced_at ELSE now() END, last_synced_at=now()
+        WHERE id=$1 RETURNING *`, [existing.rows[0].id, params[3], params[4], params[5], params[6]]);
+    return row;
+  }
+  const { rows: [row] } = await db.query(
+    `INSERT INTO pioneer_links (user_id, provider, external_card_id, card_masked, is_sandbox, status, holder_name, member_since,
+                                last_balance, balance_synced_at, linked_at, last_synced_at)
+     VALUES ($1,$2,$3,$4,false,'active',$5,$6,$7,CASE WHEN $7::int IS NULL THEN NULL ELSE now() END,$8,now()) RETURNING *`, params);
+  return row;
+}
+
+/** Marks the local mirror as unlinked (history row is kept). */
+export const markUnlinked = (db, linkId) =>
+  db.query(`UPDATE pioneer_links SET status='unlinked', unlinked_at=now(), upstream_session=NULL, upstream_session_expires_at=NULL WHERE id=$1`, [linkId]);
+
+// Very short read cache (Magical stays the source of truth; never used for financial decisions).
+const CACHE_MS = 5_000;
+const cache = new Map();
+export async function cached(key, fn) {
+  const hit = cache.get(key);
+  if (hit && hit.until > Date.now()) return hit.value;
+  const value = await fn();
+  cache.set(key, { value, until: Date.now() + CACHE_MS });
+  if (cache.size > 2000) for (const [k, v] of cache) if (v.until <= Date.now()) cache.delete(k);
+  return value;
+}
+export const forgetCustomer = (userId) => { for (const k of cache.keys()) if (k.includes(`:${userId}`)) cache.delete(k); };

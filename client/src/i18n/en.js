@@ -158,9 +158,9 @@ export default {
   pc: {
     tab: 'My Pioneer Card', brand: 'Magical Pioneer Card', member: 'Pioneer member', title: 'My Pioneer Card',
     notLinkedTitle: 'Connect your Magical Pioneer Card', notLinkedBody: 'Already have a Magical Pioneer Card? Connect it once and your member benefits work automatically.',
-    benefit1: '{p}% member discount on every order, applied at checkout', benefit2: 'Member-only codes and offers', benefit3: 'Your real Pioneer points, rewards and activity in one place',
+    benefit1: '{p}% member discount on every order, applied at checkout', benefit2: 'Member-only codes and offers', benefit3: 'Your Pioneer points, rewards and history from Magical in one place',
     connect: 'Connect Pioneer Card', formTitle: 'Connect your card',
-    formBody: 'Enter the 8-digit card number and the 3-digit verification code from your card. We check them with the Magical Pioneer Card system and never store the code.',
+    formBody: 'Enter the 8-digit card number and the 3-digit security code from your card. They are checked by Magical and never stored by the store.',
     number: 'Card number', numberHint: '8 digits, on the front of the card', code: 'Verification code', codeHint: '3 digits, on the back of the card',
     numberError: 'Enter all 8 digits of the card number.', codeError: 'Enter the 3-digit verification code.', attemptsLeft: '{n} attempts left before the card is temporarily locked.',
     checking: 'Checking with Pioneer…', submit: 'Connect card', cancel: 'Cancel', connected: 'Your Pioneer Card is connected!',
@@ -168,7 +168,7 @@ export default {
     confirmTitle: 'Confirm your card to see the current balance', confirmBody: 'For your security the connection is re-checked every few hours. Enter the 3-digit code from the back of your card.',
     confirmBtn: 'Show balance', confirming: 'Checking…', unavailable: 'The Pioneer system is not answering right now. Showing the last known balance.',
     discount: 'Member discount', discountBody: '{p}% off every order', rewards: 'Available rewards', noRewards: 'No rewards are published right now.',
-    rewardReady: 'Enough points ✓', rewardNeed: '{n} more points', upcoming: 'Coming soon', soldOut: 'All claimed', claimIn: 'Rewards are claimed in the Pioneer portal.', openPortal: 'Open Pioneer portal ↗',
+    rewardReady: 'Enough points ✓', rewardNeed: '{n} more points', upcoming: 'Coming soon', soldOut: 'All claimed', claimIn: 'Rewards are claimed through Magical; points cannot be spent in this store yet.', openPortal: 'Open Pioneer portal ↗',
     news: 'Pioneer news', history: 'Recent activity', noHistory: 'No activity yet.', stardust: '{n} Stardust earned in the store games is saved in your account.',
     disconnect: 'Disconnect this card', disconnectTitle: 'Disconnect your Pioneer Card?',
     disconnectBody: 'The member discount stops on this account. Your points stay safely on the card, and you can connect it again later with its verification code.',
@@ -179,6 +179,7 @@ export default {
     pageEyebrow: 'For Magical Pioneer Card members', pageTitle: 'Magical Pioneer Card', pageIntro: 'Connect your card to your account and get {p}% off every order, member-only offers and your Pioneer points in one place.',
     howTitle: 'How it works', how1: 'Sign in or create an account', how2: 'Open “My Pioneer Card” and enter your 8-digit card number and 3-digit code', how3: 'Your discount applies automatically at checkout',
     goToCard: 'Open My Pioneer Card', offersTitle: 'Member offers', offersBody: 'Offers in the store for Pioneer members.',
+    cardInactive: 'This Pioneer Card is inactive. Please contact Magical.', limitReached: 'Limit reached for this card', prev: '← Newer', next: 'Older →', pageOf: 'Page {page} of {pages}', unlinkedRemotely: 'Your Pioneer Card was disconnected by Magical. You can connect it again below.',
   },
   cart: {
     title: 'Your sleigh', eyebrow: 'Cart', h1a: 'Ready to', h1b: 'fly', empty: 'Your cart is empty', emptyBody: 'The reindeer are waiting for something to carry.', each: '{amount} each', personalised: 'Personalised: “{text}”',

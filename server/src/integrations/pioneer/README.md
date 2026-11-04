@@ -1,65 +1,98 @@
-# Magical Pioneer Card integration
+# Magical Pioneer Card — Christmas Store integration
 
-Customers connect an existing **Magical Pioneer Card** to their store account under **Account → My Pioneer Card**.
-The store never invents card validity, owners, balances or transactions: everything comes from the real
-Pioneer system (`magical-full`, module `server/pioneer.js`).
+Customers connect an existing Magical Pioneer Card in **Account → My Pioneer Card**. The store talks to the
+official **Magical Pioneer Card Integration API v1** (server-to-server). Magical is the source of truth for card
+links, balances, transactions and rewards; the store never invents or changes any of them.
 
-| `PIONEER_MODE` | Behaviour |
+Files: `magicalClient.js` (HTTP client), `index.js` (configuration + startup key check),
+`../../routes/pioneer.js` (customer routes), `../../services/pioneer.js` (local link mirror),
+`../../routes/admin/pioneer.js` (admin view). API contract: `magical-full/docs/PIONEER_CARD_API.md`.
+
+## Configuration (`server/.env`, never committed)
+
+| Variable | Value |
 |---|---|
-| `disabled` (default) | Connecting is unavailable; the account shows "coming soon". Nothing is simulated. |
-| `magical` | Uses the real Pioneer system at `PIONEER_API_BASE_URL` (needs `PIONEER_SESSION_KEY`). |
+| `MAGICAL_PIONEER_API_URL` | `https://magical.am/api/integration/v1` (local Magical: `http://127.0.0.1:3000/api/integration/v1`). https is required in production. |
+| `MAGICAL_PIONEER_API_KEY` | The `mgpc_…` key issued by Magical (`npm run integration -- create-key --name christmas-store --out <file>` on the Magical server). Needs scopes `cards:verify`, `cards:link`, `cards:read`, `rewards:read`. |
+| `MAGICAL_PIONEER_TIMEOUT_MS` | Optional, default `10000`. |
+| `PIONEER_MODE` | `auto` (default: on when URL and key are set) or `disabled`. |
 
-The former `http` (invented API contract) and `sandbox` (simulated cards) modes were removed.
+On startup the server calls `GET /me` and logs either `Magical Pioneer API key OK (client "christmas-store", …)` or a
+clear reason (invalid/revoked key, missing scopes, timeout, unreachable). It never crashes because Magical is down,
+and it never prints the key. Admins see the same result under **Pioneer Card → Card connections** ("Check now"
+re-runs it).
 
-## What the store calls (existing Pioneer endpoints only)
-| Store action | Pioneer endpoint |
+### Local development
+1. Run Magical locally (`npm run server` in `magical-full`, port 3000) against a **development** database, and
+   create a key there with `npm run integration -- create-key --name christmas-store --out <file>`.
+2. Put `MAGICAL_PIONEER_API_URL=http://127.0.0.1:3000/api/integration/v1` and the key in `server/.env`.
+3. `npm run dev`. Without a key the account shows "Card connection is coming soon".
+
+## Magical endpoints used
+
+| Store action | Magical endpoint |
 |---|---|
-| Verify card number (8 digits) + verification code (3 digits) | `POST /api/pioneer/login {cardNumber, cvv}` → HttpOnly session cookie `mg_pioneer` |
-| Card owner name, card number, **balance** | `GET /api/pioneer/me` |
-| History (last 10) | `GET /api/pioneer/transactions?pageSize=10` |
-| Available rewards | `GET /api/pioneer/rewards` |
-| Announcements | `GET /api/pioneer/announcements` |
-| End session on disconnect | `POST /api/pioneer/logout` (with `X-CSRF-Token` from `/me`) |
+| Startup / admin key check | `GET /me` |
+| Connect a card (customer id from the session + card number + CVV) | `POST /links` |
+| Card details and authoritative balance | `GET /customers/{id}/card` |
+| History (20 per page, paged) | `GET /customers/{id}/transactions?page=&pageSize=20` |
+| Reward catalog (public Pioneer page) | `GET /rewards` |
+| Rewards with this card's eligibility | `GET /customers/{id}/rewards` |
+| One reward's eligibility | `GET /customers/{id}/rewards/{rewardId}/eligibility` |
+| Disconnect (customer or admin) | `DELETE /customers/{id}/link` |
+| Card check without linking (client method, not used by the UI) | `POST /cards/verify` |
 
-Failures are mapped to clear customer messages: wrong number/code (with "attempts left" from Pioneer),
-inactive card, card locked, Pioneer busy (its per-IP limit), Pioneer unreachable.
+`{id}` is always the Christmas Store user id of the signed-in customer (UUID), never a value from the browser.
+Reads are cached for at most 5 seconds per customer and never used for payments.
 
-## Rules enforced by the store backend
-- A card is connected only after the Pioneer system accepts number + code; the code is passed through once and
-  never stored or logged (`*.verificationCode` is redacted).
-- One **active** connection per card and per account (partial unique indexes in migration `004`); a second
-  account gets `409 card_taken` (checked after verification, so card numbers cannot be probed).
-- Unknown request fields are refused (`.strict()`), so a client cannot send a balance or owner.
-- Disconnecting requires `{confirm: true}`; staff disconnects require a reason. Every connect, re-verify,
-  failed attempt, refusal and disconnect is written to `pioneer_link_events`.
-- Rate limits: 8 card attempts per account and 30 per IP per 15 minutes in the store, plus the Pioneer
-  system's own per-card lockout.
+## Customer flow
+1. Signed-in customer opens **My Pioneer Card** → **Connect Pioneer Card**.
+2. Enters the 8-digit card number and the 3-digit security code; the store validates the format.
+3. The store backend calls `POST /links` with the customer's own id. On success it records a local mirror row
+   (`pioneer_links`: masked number, holder name, last seen balance — no card number, no CVV) and shows the
+   card, live balance, transactions and rewards.
+4. **Disconnect** asks for confirmation, calls `DELETE /customers/{id}/link`, then marks the local row unlinked (kept as history).
+   If Magical unlinks a card on its side, the store notices on the next visit and updates its record.
 
-## Data the store keeps (`pioneer_links`)
-User ↔ 8-digit card number (needed to re-verify; never sent to the browser — the UI gets `•••• 1234`),
-cardholder name, last known balance + time, and the Pioneer cardholder session encrypted with
-AES-256-GCM (`PIONEER_SESSION_KEY`, bound to account + card). The live balance is always re-read from Pioneer;
-the stored one is shown only as "last checked …" when Pioneer cannot be asked.
+## Error handling
 
-## Still required before going live
-1. **Deploy the Pioneer module to production.** The `magical-deploy/pioneer-card-2553f0a` package states it has not
-   been applied to production yet. `PIONEER_API_BASE_URL` must point at a host where `POST /api/pioneer/login` works.
-2. **Pioneer login rate limit (blocking).** The Pioneer system allows 15 card logins per 15 minutes and 60 per day
-   **per IP**. Every verification from the store comes from the store server's IP, so the whole store shares that
-   budget (customers then see "Pioneer is busy"). On the Pioneer side, either exempt the store server's IP from
-   `pc-login-ip` / `pc-login-ip-day` (the per-card lockout still protects each card) or add a partner endpoint.
-3. **Session length.** Pioneer cardholder sessions last `PIONEER_SESSION_TTL_HOURS` (default 4). After that the
-   customer re-enters the 3-digit code to see the live balance. A read-only server-to-server endpoint
-   (e.g. `GET /api/partner/cards/{number}` with an API key) would remove this step.
-4. **Points earned in the store.** The Pioneer system has no endpoint to credit or debit points from another system,
-   so Stardust earned in store games stays recorded in the store (`reward_grants`, status `pending`) and store offers
-   cannot be paid with points. Adding Pioneer partner endpoints `credit` / `redeem` (idempotent by reference) would
-   enable both; `services/rewards.js#syncPioneerPoints` already does idempotent, retried pushes once
-   `supportsCredit` is true.
-5. Generate `PIONEER_SESSION_KEY` once (64 hex) and keep it stable; changing it only forces customers to re-enter
-   their code.
+| Magical code | Customer sees (HTTP / store code) |
+|---|---|
+| `invalid_card_credentials` | "The card number or security code is incorrect." + attempts left (400 `invalid_card`) |
+| `card_already_linked` | "This Pioneer Card is already connected to another account." (409 `card_taken`) |
+| `customer_already_linked` | "A Pioneer Card is already connected to your account." (409 `already_linked`; the existing card is then shown) |
+| `card_inactive` | "This Pioneer Card is inactive." (400) |
+| `too_many_attempts` | "Too many attempts. Please try again later." (429, `retryAfter`) |
+| `card_locked` | "This card is locked … contact Magical support." (429) |
+| `validation_failed` | "Please check the card number and security code." (400) |
+| `rate_limited` | "The Pioneer Card service is busy …" (503 `pioneer_busy`, `retryAfter`) |
+| `invalid_api_key`, `insufficient_scope`, `https_required`, `browser_requests_not_allowed` | Neutral "temporarily unavailable" (503 `pioneer_config`); details only in the server log, without the key |
+| `server_error`, timeout, unreachable, unknown | "temporarily unavailable" (503 `pioneer_upstream`) |
 
-## Testing locally against the real code
-Run `magical-full` with a **throwaway** database (never its real one), create test cards through its admin API
-(`POST /api/admin/pioneer/cards` returns the CVV once), point `PIONEER_API_BASE_URL` at it, and run
-`PIONEER_TEST_CARDS=cards.json npm test` (file: `[{ "number": "…", "cvv": "…", "expectedBalance": 200 }, …]`).
+If Magical is unavailable the dashboard still shows the last seen balance, clearly marked as not live.
+
+## Security rules
+- API key: server environment only; sent only in the `Authorization` header; not an enumerable property of the
+  client object; redacted from logs; never in responses, the database, docs or Git.
+- CVV and full card number: forwarded once to Magical, never stored, cached, logged or kept in a session
+  (log redaction covers `cvv`, `cardNumber`, `verificationCode`).
+- Requests go only from the backend (Node `fetch`, no `Origin` header, 10 s timeout).
+- Link/verify attempts are rate limited per account and per IP in the store, on top of Magical's per-card lockout.
+
+## Not supported by Magical API v1 (deliberately not implemented)
+Spending points, earning/crediting points, paying for orders with points and redeeming rewards through the store.
+`supportsCredit`/`supportsRedeem` stay `false`: Stardust earned in store games stays in the store, store offers
+cannot be paid with points (`POST /pioneer/offers/:id/redeem` answers 501), and normal payment methods are unchanged.
+
+## Data model
+`pioneer_links` rows with `provider = 'magical_api'` mirror active Magical links (`external_card_id = customer:<user id>`).
+Older rows from earlier integrations (`sandbox`, `magical`) are kept untouched as history. No migration was needed
+for v1; the old encrypted-session columns stay but are no longer used.
+
+## Tests
+`npm test` (server) runs, without any real key:
+- `test/pioneer-client.test.js` — client against an in-memory Magical mock (key check, invalid key, verify, link,
+  every error code, rate limits, card/transactions/rewards/eligibility, unlink, timeout, outage).
+- `test/pioneer-integration.test.js` — a real store server process against the mock: full customer flow, error
+  mapping, outage/timeout, revoked key, unlinking (both sides), and checks that CVVs, keys and card numbers are not
+  in the logs or the database.

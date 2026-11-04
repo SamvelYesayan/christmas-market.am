@@ -12,7 +12,7 @@ export const ORDER_STATUSES = ['pending_payment', 'confirmed', 'processing', 'sh
 
 export async function hasActivePioneer(db, userId) {
   if (!userId) return false;
-  const { rows } = await db.query(`SELECT 1 FROM pioneer_links WHERE user_id=$1 AND status='active' AND provider=$2`, [userId, pioneer.mode]);
+  const { rows } = await db.query(`SELECT 1 FROM pioneer_links WHERE user_id=$1 AND status='active' AND provider=$2`, [userId, pioneer.provider]);
   return rows.length > 0;
 }
 

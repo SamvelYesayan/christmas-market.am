@@ -62,7 +62,7 @@ christmas-market.am/
 │     ├─ middleware/        auth, validate, rateLimit, errors, csrf-origin
 │     ├─ services/          pricing, orders, rewards, gamesValidator, recommendations
 │     ├─ integrations/
-│     │   ├─ pioneer/       magicalClient (real Magical Pioneer Card API) + disabled client
+│     │   ├─ pioneer/       magicalClient (Magical Integration API v1) + disabled client
 │     │   └─ payments/      PaymentProvider registry: cash, test, idram, ameriabank, arca, stripe
 │     └─ routes/            REST routers (public, account, admin)
 └─ client/                  React 18 · Vite · React Router · Framer Motion · GSAP · Three.js
@@ -101,11 +101,11 @@ christmas-market.am/
   each provider's merchant documentation.
 
 ### Magical Pioneer Card integration
-The store connects to the real Magical Pioneer Card system (`magical-full`) through its existing cardholder API:
-- `PIONEER_MODE=disabled` (default): the account shows "coming soon", no balances are displayed.
-- `PIONEER_MODE=magical`: `MagicalPioneerClient` verifies card number + code with `POST /api/pioneer/login` and reads
-  `/me`, `/transactions`, `/rewards`, `/announcements` with the resulting cardholder session (stored encrypted).
-- Ownership (one active link per card and per account) lives in `pioneer_links`; every event in `pioneer_link_events`.
+The store uses the official Magical Pioneer Card Integration API v1 (server-to-server, Bearer key):
+- Without `MAGICAL_PIONEER_API_URL`/`MAGICAL_PIONEER_API_KEY` (or with `PIONEER_MODE=disabled`) the account shows "coming soon".
+- Links are made with `POST /links` using the signed-in user's id; card, balance, transactions and rewards are read
+  from `/customers/{id}/…`. Magical owns the links; `pioneer_links` (provider `magical_api`) is the local mirror and
+  `pioneer_link_events` the event log.
 Full details and the production checklist: `server/src/integrations/pioneer/README.md`.
 
 Points earned in store games are recorded in `reward_grants` (`pioneer_sync_status=pending`); they are pushed to the
@@ -135,7 +135,7 @@ Cart: `GET /cart`, `POST /cart/items`, `PATCH|DELETE /cart/items/:id`, `POST|DEL
 Checkout: `GET /checkout/options`, `POST /checkout/quote`, `POST /orders`, `POST /orders/:number/pay`,
 `GET /orders`, `GET /orders/:number`, `GET /orders/track?number=&email=`
 Payments: `POST /payments/:provider/callback`, `GET /payments/test/:id`, `POST /payments/test/:id/decide`
-Pioneer: `GET /pioneer/status`, `POST|DELETE /pioneer/link`, `POST /pioneer/refresh`, `GET /pioneer/summary`,
+Pioneer: `GET /pioneer/status`, `POST|DELETE /pioneer/link`, `GET /pioneer/summary`, `GET /pioneer/transactions`, `GET /pioneer/rewards`, `GET /pioneer/rewards/:id/eligibility`,
 `GET /pioneer/offers`, `POST /pioneer/offers/:id/redeem`
 Academy: `GET /academy/houses`, `GET /academy/sorting`, `POST /academy/sort`, `GET /academy/me`
 Advent: `GET /advent`, `POST /advent/:day/open`

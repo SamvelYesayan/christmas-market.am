@@ -35,7 +35,7 @@ export async function loadMe(userId) {
        LEFT JOIN user_profiles p ON p.user_id = u.id
        LEFT JOIN houses h ON h.id = p.house_id
        LEFT JOIN pioneer_links l ON l.user_id = u.id AND l.status = 'active' AND l.provider = $2
-      WHERE u.id = $1`, [userId, pioneer.mode]);
+      WHERE u.id = $1`, [userId, pioneer.provider]);
   if (!user) return { user: null };
   return {
     user: {

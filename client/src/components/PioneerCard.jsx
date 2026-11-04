@@ -75,6 +75,7 @@ function ConnectForm({ onDone, onCancel }) {
       onDone();
     } catch (err) {
       setCode('');
+      if (err.code === 'already_linked') { toast(err.message, { icon: '🌟' }); onDone(); return; }
       setTouched(false); // show the server's message, not a 'field empty' hint for the cleared code
       setError(err);
     } finally {
@@ -105,41 +106,6 @@ function ConnectForm({ onDone, onCancel }) {
         {onCancel && <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={busy}>{t('pc.cancel')}</button>}
       </div>
     </motion.form>
-  );
-}
-
-function ConfirmBalance({ onDone }) {
-  const { t } = useI18n();
-  const [code, setCode] = useState('');
-  const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!/^\d{3}$/.test(code)) { setError({ message: t('pc.codeError') }); return; }
-    setBusy(true);
-    setError(null);
-    try {
-      await api.post('/pioneer/refresh', { verificationCode: code });
-      onDone();
-    } catch (err) {
-      setError(err);
-    } finally {
-      setCode('');
-      setBusy(false);
-    }
-  };
-  return (
-    <form className="pc-confirm" onSubmit={submit} noValidate>
-      <b>{t('pc.confirmTitle')}</b>
-      <p className="muted">{t('pc.confirmBody')}</p>
-      {error && <div className="form-error" role="alert">{errorText(error, t)}</div>}
-      <div className="row">
-        <label className="sr-only" htmlFor="pc-recode">{t('pc.code')}</label>
-        <input id="pc-recode" className="pc-code-input" type="password" inputMode="numeric" autoComplete="off" dir="ltr" placeholder="•••" maxLength={3}
-          value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 3))} />
-        <button className="btn btn-sm" disabled={busy}>{busy ? t('pc.confirming') : t('pc.confirmBtn')}</button>
-      </div>
-    </form>
   );
 }
 
@@ -180,6 +146,56 @@ function DisconnectDialog({ onClose, onDone }) {
   );
 }
 
+// Magical's eligibility reasons → customer text.
+function rewardState(r, t) {
+  if (r.eligible) return { ok: true, text: t('pc.rewardReady') };
+  const reasons = r.reasons ?? [];
+  if (reasons.includes('card_inactive')) return { text: t('pc.cardInactive') };
+  if (reasons.includes('not_yet_available') || r.upcoming) return { text: t('pc.upcoming') };
+  if (reasons.includes('sold_out') || r.soldOut) return { text: t('pc.soldOut') };
+  if (reasons.includes('per_card_limit_reached') || r.limitReached) return { text: t('pc.limitReached') };
+  if (reasons.includes('insufficient_points')) return { text: t('pc.rewardNeed', { n: pts(r.shortfall) }), short: true };
+  return { text: '' };
+}
+
+function Transactions({ first }) {
+  const { t, dateShort } = useI18n();
+  const [data, setData] = useState(first);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  if (!data) return <p className="muted">{t('pc.unavailable')}</p>;
+  const pages = Math.max(1, Math.ceil((data.total ?? 0) / (data.pageSize || 20)));
+  const go = async (page) => {
+    setBusy(true);
+    setError(null);
+    try { setData(await api.get(`/pioneer/transactions?page=${page}`)); } catch (e) { setError(e); } finally { setBusy(false); }
+  };
+  const items = Array.isArray(data.items) ? data.items : [];
+  return (
+    <>
+      {error && <p className="form-error">{error.message}</p>}
+      {items.length === 0 ? <p className="muted">{t('pc.noHistory')}</p> : (
+        <ul className="ledger">
+          {items.map((h) => (
+            <li key={h.id}>
+              <span>{dateShort(h.createdAt)}</span>
+              <span>{t(`pc.tx_${h.type}`) === `pc.tx_${h.type}` ? h.label : t(`pc.tx_${h.type}`)}{h.description ? <small className="muted"> · {h.description}</small> : null}</span>
+              <b className={h.amount >= 0 ? 'plus' : 'minus'}>{h.amount >= 0 ? '+' : ''}{pts(h.amount)}</b>
+            </li>
+          ))}
+        </ul>
+      )}
+      {pages > 1 && (
+        <div className="row pc-pager">
+          <button className="btn btn-ghost btn-sm" disabled={busy || data.page <= 1} onClick={() => go(data.page - 1)}>{t('pc.prev')}</button>
+          <span className="muted">{t('pc.pageOf', { page: data.page, pages })}</span>
+          <button className="btn btn-ghost btn-sm" disabled={busy || data.page >= pages} onClick={() => go(data.page + 1)}>{t('pc.next')}</button>
+        </div>
+      )}
+    </>
+  );
+}
+
 function Dashboard({ s, reload }) {
   const { t, dateShort } = useI18n();
   const { toast, refreshUser, refreshCart } = useApp();
@@ -193,46 +209,35 @@ function Dashboard({ s, reload }) {
           <span className="eyebrow">{t('pc.points')}</span>
           <p className="balance-num">{balance != null ? pts(balance) : '—'}</p>
           {s.balance && <small className="muted">{s.balance.live ? `✦ ${t('pc.live')}` : t('pc.asOf', { date: dateShort(s.balance.asOf) })}</small>}
-          {s.error && <p className="form-error">{t('pc.unavailable')}</p>}
-          {s.needsVerification && <ConfirmBalance onDone={reload} />}
+          {s.error && <p className="form-error">{s.error}</p>}
+          {s.card.status === 'inactive' && <p className="form-error">{t('pc.cardInactive')}</p>}
           <dl className="pc-facts">
             <div><dt>{t('pc.holder')}</dt><dd>{s.card.holderName ?? t('pc.member')}</dd></div>
             <div><dt>{t('pc.cardNo')}</dt><dd dir="ltr">{s.card.masked}</dd></div>
             {s.card.memberSince && <div><dt>{t('pc.memberSinceLabel')}</dt><dd>{dateShort(s.card.memberSince)}</dd></div>}
             <div><dt>{t('pc.discount')}</dt><dd className="gold">{t('pc.discountBody', { p: s.discountPercent })}</dd></div>
           </dl>
-          {s.pendingStardust > 0 && <p className="muted small">{t('pc.stardust', { n: s.pendingStardust })}</p>}
         </div>
       </div>
+      {s.partialError && <p className="muted small">{s.partialError}</p>}
 
-      {s.announcements.length > 0 && (
+      {s.live && (
         <section className="pc-section">
-          <h3>{t('pc.news')}</h3>
-          <div className="pc-news">
-            {s.announcements.map((a) => <article key={a.id} className="panel pad"><small className="muted">{dateShort(a.date)}</small><b>{a.title}</b><p className="muted">{a.body}</p></article>)}
-          </div>
-        </section>
-      )}
-
-      {(s.rewards.length > 0 || !s.needsVerification) && (
-        <section className="pc-section">
-          <div className="row between"><h3>{t('pc.rewards')}</h3>{s.portalUrl && <a className="link" href={s.portalUrl} target="_blank" rel="noopener noreferrer">{t('pc.openPortal')}</a>}</div>
-          {s.rewards.length === 0 ? <p className="muted">{s.needsVerification ? '' : t('pc.noRewards')}</p> : (
+          <h3>{t('pc.rewards')}</h3>
+          {s.rewards.length === 0 ? <p className="muted">{t('pc.noRewards')}</p> : (
             <>
               <ul className="pc-rewards">
                 {s.rewards.map((r) => {
-                  const need = balance != null ? r.pointsCost - balance : null;
+                  const st = rewardState(r, t);
                   return (
                     <li key={r.id} className="panel pad">
                       <b>{r.title}</b>
                       {r.description && <p className="muted">{r.description}</p>}
                       <div className="row between">
                         <span className="gold">{t('common.points', { n: pts(r.pointsCost) })}</span>
-                        <small className={need != null && need <= 0 && r.available ? 'ok' : 'muted'}>
-                          {r.upcoming ? t('pc.upcoming') : r.soldOut ? t('pc.soldOut') : need == null ? '' : need <= 0 ? t('pc.rewardReady') : t('pc.rewardNeed', { n: pts(need) })}
-                        </small>
+                        <small className={st.ok ? 'ok' : 'muted'}>{st.text}</small>
                       </div>
-                      {need != null && need > 0 && <span className="bar"><span style={{ width: `${Math.max(4, Math.min(100, (balance / r.pointsCost) * 100))}%` }} /></span>}
+                      {st.short && balance != null && <span className="bar"><span style={{ width: `${Math.max(4, Math.min(100, (balance / r.pointsCost) * 100))}%` }} /></span>}
                     </li>
                   );
                 })}
@@ -243,20 +248,10 @@ function Dashboard({ s, reload }) {
         </section>
       )}
 
-      {!s.needsVerification && (
+      {s.live && (
         <section className="pc-section">
           <h3>{t('pc.history')}</h3>
-          {s.transactions.length === 0 ? <p className="muted">{t('pc.noHistory')}</p> : (
-            <ul className="ledger">
-              {s.transactions.map((h) => (
-                <li key={h.id}>
-                  <span>{dateShort(h.date)}</span>
-                  <span>{t(`pc.tx_${h.type}`)}{h.description ? <small className="muted"> · {h.description}</small> : null}</span>
-                  <b className={h.points >= 0 ? 'plus' : 'minus'}>{h.points >= 0 ? '+' : ''}{pts(h.points)}</b>
-                </li>
-              ))}
-            </ul>
-          )}
+          <Transactions first={s.transactions} />
         </section>
       )}
 
@@ -281,11 +276,13 @@ export default function MyPioneerCard() {
   if (state.error) return <p className="form-error">{state.error.message}</p>;
   const s = state.data;
   if (s.linked) return <Dashboard s={s} reload={reload} />;
+  const remoteNotice = s.unlinkedRemotely ? <p className="form-error">{t('pc.unlinkedRemotely')}</p> : null;
   const discount = s.discountPercent ?? pioneerStatus?.discountPercent ?? 5;
   return (
     <div className="pc-empty">
       <CardVisual empty />
       <div className="pc-intro">
+        {remoteNotice}
         <h2>{t('pc.notLinkedTitle')}</h2>
         <p className="muted">{t('pc.notLinkedBody')}</p>
         <ul className="pc-benefits">

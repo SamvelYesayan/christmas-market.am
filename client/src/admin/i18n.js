@@ -2,6 +2,8 @@
 import { useI18n } from '../i18n/index.jsx';
 
 const HY = {
+  'API key check': 'API բանալու ստուգում', OK: 'Կարգին է', 'Check now': 'Ստուգել հիմա',
+  'Card owners, points and rewards live in Magical. The store links a card only after Magical checks its number and 3-digit code, and only reads balances, history and rewards through the Magical Integration API — they cannot be edited here.': 'Քարտերի սեփականատերերը, միավորներն ու պարգևները պահվում են Magical-ում։ Խանութը քարտը միացնում է միայն այն բանից հետո, երբ Magical-ը ստուգում է դրա համարը և 3 նիշանոց կոդը, և միայն կարդում է մնացորդը, պատմությունն ու պարգևները Magical Integration API-ի միջոցով․ այստեղ դրանք հնարավոր չէ խմբագրել։',
   'Sales': 'Վաճառք',
   'Catalog': 'Տեսականի',
   'Promotions': 'Ակցիաներ',

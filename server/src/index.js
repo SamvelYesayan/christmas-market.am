@@ -4,15 +4,16 @@ import { logger } from './lib/logger.js';
 import { pool, checkDatabase } from './db.js';
 import { expireUnpaidOrders } from './services/orders.js';
 import { syncAllPending } from './services/rewards.js';
-import { pioneer } from './integrations/pioneer/index.js';
+import { pioneer, checkPioneerConnection } from './integrations/pioneer/index.js';
 import { listPaymentMethods } from './integrations/payments/index.js';
 
 const app = createApp();
 const server = app.listen(config.PORT, () => {
   logger.info(`🎄 Magical Christmas API listening on :${config.PORT} (${config.NODE_ENV})`);
-  logger.info(`Pioneer Card mode: ${pioneer.mode}${pioneer.configured ? '' : ' (not connected)'}`);
+  logger.info(`Pioneer Card integration: ${pioneer.mode}${pioneer.configured ? '' : ' (not connected)'}`);
   logger.info(`Payment methods: ${listPaymentMethods().map((m) => m.code).join(', ')}`);
   checkDatabase();
+  checkPioneerConnection();
 });
 
 // Background housekeeping (single instance; move to a scheduler/queue when scaling horizontally).

@@ -302,3 +302,4 @@ html.calm .wrap-paper { display: none; }
 .more-tile small { display: block; line-height: 1.4; }
 .more-art { width: 64px; height: 64px; }
 .more-go { color: var(--gold); font-size: 1.2rem; }
+.pc-pager { justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; }

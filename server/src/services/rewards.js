@@ -12,7 +12,7 @@ export async function getRule(db, key) {
 }
 
 async function activePioneerLink(db, userId) {
-  const { rows } = await db.query(`SELECT * FROM pioneer_links WHERE user_id = $1 AND status = 'active' AND provider = $2`, [userId, pioneer.mode]);
+  const { rows } = await db.query(`SELECT * FROM pioneer_links WHERE user_id = $1 AND status = 'active' AND provider = $2`, [userId, pioneer.provider]);
   return rows[0] ?? null;
 }
 
@@ -83,7 +83,7 @@ export const publicGrant = (g) => g && ({
  */
 export async function syncPioneerPoints(userId) {
   if (!pioneer.configured || !pioneer.supportsCredit) return;
-  const link = await one(`SELECT * FROM pioneer_links WHERE user_id=$1 AND status='active' AND provider=$2`, [userId, pioneer.mode]);
+  const link = await one(`SELECT * FROM pioneer_links WHERE user_id=$1 AND status='active' AND provider=$2`, [userId, pioneer.provider]);
   if (!link) return;
   const pending = await many(
     `SELECT * FROM reward_grants WHERE user_id=$1 AND points > 0 AND pioneer_sync_status IN ('pending','failed','no_card') ORDER BY created_at LIMIT 100`,

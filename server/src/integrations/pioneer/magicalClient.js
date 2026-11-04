@@ -1,124 +1,102 @@
-// Adapter for the real Magical Pioneer Card system (magical-full, server/pioneer.js).
-// It uses ONLY the cardholder endpoints that system already exposes:
-//   POST /api/pioneer/login   {cardNumber, cvv}  → 200 + HttpOnly cookie `mg_pioneer` (Max-Age = session TTL)
-//                                                 → 401 invalid_credentials · 403 card_inactive · 422 validation_failed
-//                                                 → 429 too_many_attempts / card_locked (Retry-After)
-//   GET  /api/pioneer/me | /transactions | /rewards | /announcements   (cookie session; 401 when it expired)
-//   POST /api/pioneer/logout  (cookie session + X-CSRF-Token)
-// The Pioneer database stays the source of truth for the card, its owner name and its points.
-// There is no endpoint for crediting or debiting points from outside, so this adapter does not do either.
+// Client for the official Magical Pioneer Card Integration API v1 (server-to-server).
+//   Base URL: MAGICAL_PIONEER_API_URL (e.g. https://magical.am/api/integration/v1)
+//   Auth:     Authorization: Bearer <MAGICAL_PIONEER_API_KEY>   (scopes: cards:verify, cards:link, cards:read, rewards:read)
+// Reference: magical-full/docs/PIONEER_CARD_API.md. Magical is the source of truth for links, balances,
+// transactions and rewards. v1 cannot credit, debit or redeem points, so this client cannot either.
+//
+// Security: the API key is only ever placed in the Authorization header. It is never logged, returned or
+// included in error messages. Card numbers and CVVs are only sent in request bodies and never kept.
 
-const COOKIE = 'mg_pioneer';
+export class MagicalApiError extends Error {
+  /**
+   * code: the Magical error code (invalid_card_credentials, card_already_linked, …) or one of the client's own:
+   *   timeout | unreachable | bad_response | not_configured
+   */
+  constructor(code, { status = null, fields = null, retryAfter = null, message } = {}) {
+    super(message ?? `Magical Pioneer API: ${code}`);
+    this.name = 'MagicalApiError';
+    this.code = code;
+    this.status = status;
+    this.fields = fields;
+    this.retryAfter = retryAfter;
+  }
+}
+
+const enc = encodeURIComponent;
 
 export class MagicalPioneerClient {
-  mode = 'magical';
+  mode = 'magical_api';
+  provider = 'magical_api';
   configured = true;
-  supportsCredit = false; // no partner endpoint exists in the Pioneer system
-  supportsRedeem = false; // store offers cannot spend Pioneer points; Pioneer rewards are claimed in the Pioneer portal
+  supportsCredit = false; // not in Magical API v1
+  supportsRedeem = false; // not in Magical API v1
 
-  constructor(config, PioneerError) {
-    this.base = config.PIONEER_API_BASE_URL.replace(/\/$/, '');
-    this.timeout = config.PIONEER_API_TIMEOUT_MS;
-    this.portalUrl = config.PIONEER_PORTAL_URL || `${this.base}/pioneer-card`;
-    this.Err = PioneerError;
+  constructor({ baseUrl, apiKey, timeoutMs = 10_000, fetchImpl = globalThis.fetch } = {}) {
+    if (!baseUrl || !apiKey) throw new Error('MagicalPioneerClient needs baseUrl and apiKey');
+    this.base = baseUrl.replace(/\/+$/, '');
+    this.timeoutMs = timeoutMs;
+    this.fetch = fetchImpl;
+    // Keep the key off the instance's enumerable fields so it can't leak through JSON/inspection.
+    Object.defineProperty(this, 'authHeader', { value: `Bearer ${apiKey}`, enumerable: false });
   }
 
-  async #call(method, path, { token, body, csrf } = {}) {
+  async #request(path, { method = 'GET', body } = {}) {
     let res;
     try {
-      res = await fetch(this.base + path, {
+      res = await this.fetch(this.base + path, {
         method,
         headers: {
+          Authorization: this.authHeader,
           Accept: 'application/json',
           ...(body ? { 'Content-Type': 'application/json' } : {}),
-          ...(token ? { Cookie: `${COOKIE}=${token}` } : {}),
-          ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
         },
         body: body ? JSON.stringify(body) : undefined,
         redirect: 'error',
-        signal: AbortSignal.timeout(this.timeout),
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (err) {
-      throw new this.Err('upstream_error', `Pioneer service unreachable (${err.name}).`);
+      const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+      throw new MagicalApiError(timedOut ? 'timeout' : 'unreachable');
     }
-    const data = await res.json().catch(() => ({}));
-    return { res, data };
-  }
-
-  #fail(res, data) {
-    const code = data?.error?.code;
-    if (res.status === 401 && code === 'unauthenticated') throw new this.Err('session_expired', 'Pioneer session expired.');
-    if (res.status === 401 || res.status === 422) {
-      const e = new this.Err('invalid_card', 'Card number or verification code is incorrect.');
-      const left = data?.error?.fields?.attemptsBeforeLock;
-      if (Number.isInteger(left)) e.attemptsLeft = left;
-      throw e;
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const retry = Number(res.headers.get('retry-after'));
+      throw new MagicalApiError(data?.error?.code ?? (res.status >= 500 ? 'server_error' : 'bad_response'), {
+        status: res.status,
+        fields: data?.error?.fields ?? null,
+        retryAfter: Number.isFinite(retry) && retry > 0 ? retry : null,
+      });
     }
-    if (res.status === 403 && code === 'card_inactive') throw new this.Err('card_inactive', 'This Pioneer Card is not active.');
-    if (res.status === 429) {
-      // card_locked / too_many_attempts concern one card; rate_limited is the Pioneer system's per-IP limit,
-      // which every store customer shares (all verifications come from the store server).
-      const e = new this.Err(code === 'card_locked' ? 'card_locked' : code === 'too_many_attempts' ? 'too_many_attempts' : 'service_busy', 'Too many attempts.');
-      e.retryAfter = Number(res.headers.get('retry-after')) || null;
-      throw e;
-    }
-    throw new this.Err('upstream_error', `Pioneer service error (${res.status}).`);
-  }
-
-  /** Verifies card number + CVV with the Pioneer system. Returns its cardholder session (never the CVV). */
-  async login(cardNumber, cvv) {
-    const { res, data } = await this.#call('POST', '/api/pioneer/login', { body: { cardNumber, cvv } });
-    if (!res.ok) this.#fail(res, data);
-    const cookie = (res.headers.getSetCookie?.() ?? [res.headers.get('set-cookie') ?? '']).find((c) => c.startsWith(`${COOKIE}=`));
-    const token = cookie?.slice(COOKIE.length + 1).split(';')[0];
-    if (!token) throw new this.Err('upstream_error', 'Pioneer service did not open a session.');
-    const maxAge = Number(/max-age=(\d+)/i.exec(cookie)?.[1] ?? 3600);
-    return { token, expiresAt: new Date(Date.now() + Math.max(60, maxAge - 60) * 1000) };
-  }
-
-  async #get(token, path) {
-    const { res, data } = await this.#call('GET', path, { token });
-    if (!res.ok) this.#fail(res, data);
+    if (data === null || typeof data !== 'object') throw new MagicalApiError('bad_response', { status: res.status });
     return data;
   }
 
-  /** Card owner, number and the authoritative balance. */
-  async me(token) {
-    const d = await this.#get(token, '/api/pioneer/me');
-    const number = String(d?.card?.number ?? '');
-    if (!/^\d{8}$/.test(number)) throw new this.Err('upstream_error', 'Unexpected Pioneer response.');
-    return {
-      number,
-      holderName: d.card.hasName ? d.card.displayName : null,
-      memberSince: d.card.memberSince ?? null,
-      balance: Number(d.balance),
-      csrf: d.csrfToken ?? null,
-    };
+  /** GET /me — validates the key. → { client: { name, scopes } } */
+  me() { return this.#request('/me'); }
+
+  /** POST /cards/verify → { valid: true, card } | { valid: false, reason, attemptsBeforeLock } */
+  verifyCard(cardNumber, cvv) { return this.#request('/cards/verify', { method: 'POST', body: { cardNumber, cvv } }); }
+
+  /** POST /links — links the card to the store customer. → { link: { customerId, linkedAt, card, balance } } */
+  link(customerId, cardNumber, cvv) { return this.#request('/links', { method: 'POST', body: { customerId: String(customerId), cardNumber, cvv } }); }
+
+  /** DELETE /customers/{id}/link → { unlinked: true, customerId } */
+  unlink(customerId) { return this.#request(`/customers/${enc(customerId)}/link`, { method: 'DELETE' }); }
+
+  /** GET /customers/{id}/card → { link: { customerId, linkedAt, card, balance } } */
+  card(customerId) { return this.#request(`/customers/${enc(customerId)}/card`); }
+
+  /** GET /customers/{id}/transactions → { balance, items, total, page, pageSize } */
+  transactions(customerId, page = 1, pageSize = 20) {
+    return this.#request(`/customers/${enc(customerId)}/transactions?page=${Number(page) || 1}&pageSize=${Number(pageSize) || 20}`);
   }
 
-  async transactions(token, pageSize = 10) {
-    const d = await this.#get(token, `/api/pioneer/transactions?pageSize=${pageSize}`);
-    return (d.items ?? []).map((t) => ({ id: t.id, type: t.type, points: t.amount, balanceAfter: t.balanceAfter, description: t.description, date: t.createdAt }));
-  }
+  /** GET /rewards → { items } */
+  rewards() { return this.#request('/rewards'); }
 
-  async rewards(token) {
-    const d = await this.#get(token, '/api/pioneer/rewards');
-    return (d.items ?? []).map((r) => ({
-      id: r.id, title: r.title, description: r.description, pointsCost: r.pointsCost, discountPercent: r.discountPercent ?? null,
-      discountAmount: r.discountAmount ?? null, available: !!r.available, upcoming: !!r.upcoming, soldOut: !!r.soldOut, availableUntil: r.availableUntil ?? null,
-    }));
-  }
+  /** GET /customers/{id}/rewards → { balance, cardStatus, items (with eligibility) } */
+  customerRewards(customerId) { return this.#request(`/customers/${enc(customerId)}/rewards`); }
 
-  async announcements(token) {
-    const d = await this.#get(token, '/api/pioneer/announcements');
-    return (d.items ?? []).slice(0, 5).map((a) => ({ id: a.id, title: a.title, body: a.body, date: a.createdAt }));
-  }
-
-  /** Ends the cardholder session in the Pioneer system (best effort). */
-  async logout(token) {
-    try {
-      const { csrf } = await this.me(token);
-      await this.#call('POST', '/api/pioneer/logout', { token, csrf });
-    } catch { /* already expired or unreachable: nothing to end */ }
-  }
+  /** GET /customers/{id}/rewards/{rewardId}/eligibility */
+  eligibility(customerId, rewardId) { return this.#request(`/customers/${enc(customerId)}/rewards/${enc(rewardId)}/eligibility`); }
 }
