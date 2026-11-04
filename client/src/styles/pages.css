@@ -240,3 +240,65 @@ html.calm .wrap-paper { display: none; }
 .star-btn { font-size: 1.6rem; color: rgba(255,255,255,0.25); }
 .star-btn.on { color: var(--gold); }
 @media (max-width: 900px) { .product-grid { grid-template-columns: 1fr; } .window-frame { position: relative; top: 0; } .window-arch { max-width: 520px; margin: 0 auto; } }
+
+/* ── My Pioneer Card ───────────────────────────────────────── */
+.pc-card.is-empty { filter: saturate(0.75); }
+.pc-card.is-empty .vip-card-num { color: rgba(255, 241, 201, 0.55); }
+.pc-empty { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(1.5rem, 4vw, 3.5rem); align-items: center; }
+.pc-intro { display: grid; gap: 1rem; justify-items: start; }
+.pc-intro h2 { margin: 0; }
+.pc-benefits { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+.pc-benefits li { position: relative; padding-left: 1.6rem; }
+.pc-benefits li::before { content: '✦'; position: absolute; left: 0; color: var(--gold); }
+.pc-form { width: 100%; display: grid; gap: 0.6rem; }
+.pc-form h3 { margin: 0; }
+.pc-fields { display: grid; grid-template-columns: 1.6fr 1fr; gap: 0 1rem; }
+.pc-fields input { font-size: 1.25rem; letter-spacing: 0.18em; font-variant-numeric: tabular-nums; }
+.field-error { color: #ffb3bf; }
+.pc-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(1.5rem, 4vw, 3rem); align-items: center; }
+.pc-balance { display: grid; gap: 0.3rem; }
+.pc-balance .balance-num { margin: 0.2rem 0 0; }
+.pc-facts { display: grid; gap: 0.5rem; margin: 1rem 0 0; }
+.pc-facts div { display: flex; justify-content: space-between; gap: 1rem; border-top: 1px dashed var(--line); padding-top: 0.5rem; }
+.pc-facts dt { color: var(--muted); font-size: 0.85rem; }
+.pc-facts dd { margin: 0; text-align: right; }
+.pc-confirm { display: grid; gap: 0.4rem; margin-top: 0.8rem; padding: 1rem; border-radius: 14px; border: 1px solid rgba(242,196,109,0.45); background: rgba(242,196,109,0.07); }
+.pc-confirm p { margin: 0; font-size: 0.9rem; }
+.pc-code-input { width: 6.5rem; font-size: 1.2rem; letter-spacing: 0.3em; text-align: center; }
+.pc-section { margin-top: clamp(2rem, 5vw, 3rem); }
+.pc-news { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
+.pc-news article { display: grid; gap: 0.3rem; }
+.pc-news p { margin: 0; }
+.pc-rewards { list-style: none; padding: 0; margin: 0 0 0.8rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 1rem; }
+.pc-rewards li { display: grid; gap: 0.5rem; align-content: start; }
+.pc-rewards p { margin: 0; font-size: 0.92rem; }
+.pc-rewards .bar { width: 100%; }
+.pc-rewards .ok { color: #7fe0c4; }
+.pc-manage { margin-top: 2.5rem; text-align: center; }
+.small { font-size: 0.85rem; }
+@media (max-width: 860px) {
+  .pc-empty, .pc-top { grid-template-columns: 1fr; }
+  .pc-intro { justify-items: stretch; }
+}
+@media (max-width: 430px) {
+  .pc-fields { grid-template-columns: 1fr; }
+  .ledger li { grid-template-columns: 1fr auto; }
+  .ledger li > span:first-child { grid-column: 1 / -1; font-size: 0.8rem; }
+}
+.pc-landing { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(1.5rem, 4vw, 3.5rem); align-items: center; padding-top: clamp(2rem, 6vw, 4rem); }
+.pc-landing h1 { margin: 0; }
+.pc-steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 1rem; }
+.pc-steps li { counter-increment: s; padding: 1.2rem 1.2rem 1.2rem 3.4rem; position: relative; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,0.03); }
+.pc-steps li::before { content: counter(s); position: absolute; left: 1.1rem; top: 1.05rem; width: 1.7rem; height: 1.7rem; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: #1a1205; font-weight: 700; }
+@media (max-width: 860px) { .pc-landing { grid-template-columns: 1fr; } .pc-landing .vip-card-stage { order: -1; } }
+
+/* Home: popular gifts header + "More Christmas magic" row */
+.home-head { align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
+.home-head .chapter { margin-bottom: 0; }
+.more-magic { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 1rem; }
+.more-tile { display: grid; grid-template-columns: 64px 1fr auto; gap: 1rem; align-items: center; padding: 1.1rem 1.2rem; border-radius: 18px; border: 1px solid var(--line); background: rgba(255,255,255,0.03); transition: border-color 0.3s var(--ease), transform 0.3s var(--ease), background 0.3s; height: 100%; }
+.more-tile:hover { border-color: var(--gold); transform: translateY(-3px); background: rgba(242,196,109,0.06); }
+.more-tile b { display: block; font-size: 1.05rem; margin-bottom: 0.15rem; }
+.more-tile small { display: block; line-height: 1.4; }
+.more-art { width: 64px; height: 64px; }
+.more-go { color: var(--gold); font-size: 1.2rem; }

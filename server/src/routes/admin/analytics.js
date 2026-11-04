@@ -36,7 +36,7 @@ r.get('/', validate({ query: z.object({ days: z.coerce.number().int().min(1).max
     many(`SELECT status, count(*)::int AS n FROM orders WHERE NOT is_test AND created_at >= ${since} GROUP BY status`),
     many(`SELECT p.name, v.name AS variant, v.sku, v.stock FROM product_variants v JOIN products p ON p.id=v.product_id
            WHERE p.is_active AND v.is_active AND v.stock < 5 ORDER BY v.stock LIMIT 10`),
-    one(`SELECT count(*) FILTER (WHERE status='active')::int AS linked,
+    one(`SELECT count(*) FILTER (WHERE status='active' AND provider='magical')::int AS linked,
                 (SELECT COALESCE(SUM(points),0)::int FROM reward_grants WHERE created_at >= ${since}) AS stardust_awarded,
                 (SELECT count(*)::int FROM pioneer_redemptions WHERE status='completed' AND created_at >= ${since}) AS redemptions
            FROM pioneer_links`),

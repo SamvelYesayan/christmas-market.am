@@ -1,6 +1,6 @@
 // The Elves' Office — admin panel (lazy-loaded, separate bundle).
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { api, qs } from '../api/client.js';
 import { useApp } from '../state/AppState.jsx';
 import { money } from '../lib.js';
@@ -243,6 +243,71 @@ function OrderDetail() {
 }
 
 /* ───────── Customers ───────── */
+/** Asks for a reason (stored in the connection log), then disconnects a customer's card. Points are never touched. */
+async function unlinkCard(userId, at, toast, done) {
+  const reason = window.prompt(at('Why are you disconnecting this card? (stored in the connection log)'));
+  if (reason == null) return;
+  if (reason.trim().length < 3) { toast(at('Please enter a short reason.'), { tone: 'error' }); return; }
+  try { await api.post(`/admin/customers/${userId}/pioneer/unlink`, { reason: reason.trim() }); done(); } catch (e) { toast(e.message, { tone: 'error' }); }
+}
+
+/* ───────── Pioneer Card connections (read-only) ───────── */
+const EVENT_LABEL = { linked: 'Connected', relinked: 'Connected again', refreshed: 'Re-verified', unlinked: 'Disconnected by customer', admin_unlinked: 'Disconnected by staff', verify_failed: 'Wrong card or code', rejected_taken: 'Refused: card already connected' };
+function PioneerLinks() {
+  const at = useAt();
+  const { toast } = useApp();
+  const [d, setD] = useState(null);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('active');
+  const load = () => api.get(`/admin/pioneer-links${qs({ q, status })}`).then(setD).catch((e) => toast(e.message, { tone: 'error' }));
+  useEffect(() => { load(); }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!d) return <p className="muted">{at('Loading…')}</p>;
+  return (
+    <div className="admin-section">
+      <header className="admin-head"><h1>{at('Card connections')}</h1>
+        <div className="row">
+          <form onSubmit={(e) => { e.preventDefault(); load(); }}><input className="input" placeholder={at('Customer, cardholder, last 4 digits')} value={q} onChange={(e) => setQ(e.target.value)} /></form>
+          {['active', 'unlinked', ''].map((x) => <button key={x || 'all'} className={`chip ${status === x ? 'on' : ''}`} onClick={() => setStatus(x)}>{at(x === 'active' ? 'Connected' : x === 'unlinked' ? 'Disconnected' : 'All')}</button>)}
+        </div>
+      </header>
+      <div className="admin-grid">
+        <section className="admin-card">
+          <h3>{at('Connection to the Pioneer system')}</h3>
+          <ul className="plain">
+            <li><span>{at('Status')}</span><b className={d.connection.available ? 'ok' : 'danger'}>{d.connection.available ? at('Connected') : at('Not configured')}</b></li>
+            <li><span>{at('Pioneer system')}</span><b>{d.connection.baseUrl ?? '—'}</b></li>
+            <li><span>{at('Connected cards')}</span><b>{d.stats.active}</b></li>
+            <li><span>{at('Disconnected')}</span><b>{d.stats.disconnected}</b></li>
+          </ul>
+        </section>
+        <section className="admin-card">
+          <h3>{at('How points work')}</h3>
+          <p className="muted small">{at('Card owners, points and rewards live in the Pioneer system. This store only reads them after the customer verifies the card with its 3-digit code, so balances cannot be edited here. Adjust points in the Pioneer admin, where every change is recorded.')}</p>
+        </section>
+      </div>
+      <div className="table-wrap"><table className="admin-table">
+        <thead><tr><th>{at('Customer')}</th><th>{at('Card')}</th><th>{at('Cardholder')}</th><th>{at('Status')}</th><th>{at('Connected on')}</th><th>{at('Last known points')}</th><th /></tr></thead>
+        <tbody>{d.links.length === 0 ? <tr><td colSpan={7} className="muted">{at('No card connections yet.')}</td></tr> : d.links.map((l) => (
+          <tr key={l.id}>
+            <td><Link to={`/admin/customers/${l.user_id}`}><b>{l.customer}</b></Link><br /><small className="muted">{l.email}</small></td>
+            <td dir="ltr">{l.card_masked}</td><td>{l.holder_name ?? '—'}</td>
+            <td>{l.status === 'active' ? at('Connected') : at('Disconnected')}</td>
+            <td>{date(l.linked_at)}</td>
+            <td>{l.last_balance ?? '—'}{l.balance_synced_at ? <small className="muted"> · {date(l.balance_synced_at)}</small> : null}</td>
+            <td>{l.status === 'active' && <button className="btn btn-ghost btn-sm" onClick={() => unlinkCard(l.user_id, at, toast, load)}>{at('Disconnect')}</button>}</td>
+          </tr>))}</tbody>
+      </table></div>
+      <section className="admin-card wide" style={{ marginTop: '1.5rem' }}>
+        <h3>{at('Recent activity')}</h3>
+        {d.events.length === 0 ? <p className="muted">{at('No activity yet.')}</p> : (
+          <table className="admin-table compact"><tbody>{d.events.map((e, i) => (
+            <tr key={i}><td>{new Date(e.created_at).toLocaleString()}</td><td>{at(EVENT_LABEL[e.event] ?? e.event)}</td><td dir="ltr">{e.card_masked ?? ''}</td><td>{e.email ?? ''}</td><td className="muted">{e.actor ? `${at('by')} ${e.actor}` : ''}{e.detail ? ` · ${e.detail}` : ''}</td></tr>))}</tbody></table>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function Customers() {
   const at = useAt();
   const [items, setItems] = useState(null);
@@ -263,7 +328,7 @@ function Customers() {
             <tr key={u.id}>
               <td><Link to={`/admin/customers/${u.id}`}><b>{u.name}</b></Link>{u.role === 'admin' && <span className="tag">{at('admin')}</span>}{u.is_demo && <span className="tag">{at('demo')}</span>}</td>
               <td>{u.email}</td><td>{date(u.created_at)}</td><td>{u.orders}</td><td>{money(u.spent)}</td><td>{u.house ?? '—'}</td>
-              <td>{u.pioneer_status === 'active' ? `${u.card_masked}${u.pioneer_sandbox ? ' (sandbox)' : ''}` : '—'}</td>
+              <td dir="ltr">{u.pioneer_status === 'active' ? u.card_masked : '—'}</td>
               <td>{u.is_active ? at('Active') : at('Disabled')}</td>
             </tr>))}</tbody>
         </table></div>
@@ -301,8 +366,14 @@ function CustomerDetail() {
         </section>
         <section className="admin-card">
           <h3>{at('Magical Pioneer Card')}</h3>
-          {u.pioneer ? <><ul className="plain"><li><span>{at('Card')}</span><b>{u.pioneer.card_masked}</b></li><li><span>{at('Tier')}</span><b>{u.pioneer.tier ?? '—'}</b></li><li><span>{at('Status')}</span><b>{u.pioneer.status}{u.pioneer.is_sandbox ? ' (sandbox)' : ''}</b></li><li><span>{at('Linked')}</span><b>{date(u.pioneer.linked_at)}</b></li></ul>
-            {u.pioneer.status === 'active' && <button className="btn btn-ghost btn-sm" onClick={async () => { if (window.confirm(at('Unlink this card?'))) { await api.post(`/admin/customers/${id}/pioneer/unlink`); load(); } }}>{at('Unlink card')}</button>}</> : <p className="muted">{at('No card linked.')}</p>}
+          {u.pioneer ? <><ul className="plain">
+              <li><span>{at('Card')}</span><b dir="ltr">{u.pioneer.card_masked}</b></li>
+              <li><span>{at('Cardholder')}</span><b>{u.pioneer.holder_name ?? '—'}</b></li>
+              <li><span>{at('Status')}</span><b>{u.pioneer.status === 'active' ? at('Connected') : at('Disconnected')}</b></li>
+              <li><span>{at('Connected on')}</span><b>{date(u.pioneer.linked_at)}</b></li>
+              <li><span>{at('Last known points')}</span><b>{u.pioneer.last_balance ?? '—'}{u.pioneer.balance_synced_at ? ` · ${date(u.pioneer.balance_synced_at)}` : ''}</b></li></ul>
+            <p className="muted small">{at('Points are read from the Pioneer system and can only be changed in the Pioneer admin.')}</p>
+            {u.pioneer.status === 'active' && <button className="btn btn-ghost btn-sm" onClick={() => unlinkCard(id, at, toast, load)}>{at('Disconnect card')}</button>}</> : <p className="muted">{at('No card connected.')}</p>}
         </section>
         <section className="admin-card wide">
           <h3>{at('Orders')}</h3>
@@ -330,7 +401,7 @@ const CONFIGS = {
   banners: { title: 'Banners', endpoint: 'banners', description: 'Placement "home_ribbon" scrolls under the homepage hero.',
     fields: [{ name: 'placement', label: 'Placement', default: 'home_ribbon' }, { name: 'title', label: 'Title' }, { name: 'subtitle', label: 'Subtitle', nullable: true }, { name: 'cta_label', label: 'Button label', nullable: true }, { name: 'cta_link', label: 'Link (/path or https://)', nullable: true }, { name: 'image_url', label: 'Image URL', nullable: true }, { name: 'art', label: 'Art', nullable: true }, { name: 'sort', label: 'Order', type: 'number' }, { name: 'is_active', label: 'Active', type: 'bool' }],
     columns: [{ key: 'placement', label: 'Placement' }, { key: 'title', label: 'Title' }, { key: 'cta_link', label: 'Link' }, { key: 'is_active', label: 'Active', render: (r) => yes(r.is_active) }] },
-  'pioneer-offers': { title: 'Pioneer offers & reward shop', endpoint: 'pioneer-offers', description: 'redeem_gift and discount offers cost points; exclusive_product gives members early access.',
+  'pioneer-offers': { title: 'Member offers', endpoint: 'pioneer-offers', description: 'Shown to Pioneer members on the Pioneer Card page. Points cannot be spent in the store: the Pioneer system offers no way to deduct points, so Pioneer rewards are claimed in the Pioneer portal.',
     fields: [{ name: 'title', label: 'Title' }, { name: 'description', label: 'Description', type: 'textarea', nullable: true }, { name: 'kind', label: 'Kind', type: 'select', options: ['redeem_gift', 'discount', 'exclusive_product'], default: 'redeem_gift' }, { name: 'points_cost', label: 'Points cost', type: 'number', nullable: true }, { name: 'discount_percent', label: 'Discount %', type: 'number', nullable: true, default: '' }, { name: 'product_id', label: 'Product ID (uuid)', nullable: true }, { name: 'stock', label: 'Stock (empty = unlimited)', type: 'number', nullable: true, default: '' }, { name: 'starts_at', label: 'Starts', type: 'datetime' }, { name: 'ends_at', label: 'Ends', type: 'datetime' }, { name: 'is_active', label: 'Active', type: 'bool' }],
     columns: [{ key: 'title', label: 'Title' }, { key: 'kind', label: 'Kind' }, { key: 'points_cost', label: 'Points' }, { key: 'stock', label: 'Stock' }, { key: 'is_active', label: 'Active', render: (r) => yes(r.is_active) }] },
   advent: { title: 'Advent calendar', endpoint: 'advent', pk: 'id', description: 'payload by kind — coupon: {type,value,min_subtotal,valid_days} · points: {points} · product: {product_slug} · gift: {text, coupon:{…}} · minigame: {game} · story: {story} · challenge: {text}',
@@ -377,11 +448,15 @@ const CONFIGS = {
     columns: [{ key: 'email', label: 'Email' }, { key: 'name', label: 'Name' }, { key: 'consent_at', label: 'Since', render: (r) => date(r.consent_at) }, { key: 'unsubscribed_at', label: 'Unsubscribed', render: (r) => date(r.unsubscribed_at) }] },
 };
 
+// Grouped by the job an admin is doing; the seasonal games are tucked into one collapsible group.
 const NAV = [
-  ['Store', [['', 'Dashboard'], ['products', 'Products'], ['categories', 'Categories'], ['orders', 'Orders'], ['customers', 'Customers'], ['shipping-zones', 'Delivery'], ['reviews', 'Reviews']]],
-  ['Marketing', [['coupons', 'Discount codes'], ['campaigns', 'Campaigns'], ['banners', 'Banners'], ['pioneer-offers', 'Pioneer offers'], ['newsletter', 'Newsletter']]],
-  ['Experiences', [['advent', 'Advent calendar'], ['challenges', 'Daily challenges'], ['games', 'Mini-games'], ['reward-rules', 'Reward rules'], ['quiz', 'Quiz'], ['wheel', 'Wheel'], ['mystery', 'Mystery box'], ['hidden-objects', 'Hidden wonders'], ['events', 'Events']]],
-  ['Content', [['content', 'Homepage texts']]],
+  ['Sales', [['', 'Dashboard'], ['orders', 'Orders'], ['customers', 'Customers']]],
+  ['Catalog', [['products', 'Products'], ['categories', 'Categories'], ['reviews', 'Reviews']]],
+  ['Promotions', [['coupons', 'Discount codes'], ['campaigns', 'Campaigns'], ['banners', 'Banners']]],
+  ['Pioneer Card', [['pioneer-links', 'Card connections'], ['pioneer-offers', 'Member offers']]],
+  ['Website', [['content', 'Homepage texts'], ['events', 'Events'], ['newsletter', 'Newsletter']]],
+  ['Store settings', [['shipping-zones', 'Delivery']]],
+  ['Christmas fun', [['advent', 'Advent calendar'], ['challenges', 'Daily challenges'], ['games', 'Mini-games'], ['reward-rules', 'Reward rules'], ['quiz', 'Quiz'], ['wheel', 'Wheel'], ['mystery', 'Mystery box'], ['hidden-objects', 'Hidden wonders']], { collapsible: true }],
 ];
 
 function CrudRoute() {
@@ -397,6 +472,7 @@ export default function AdminApp() {
   const at = useAt();
   const { user, authReady } = useApp();
   const [open, setOpen] = useState(false);
+  const location = useLocation();
   useEffect(() => { document.title = `${at('✦ Elves’ Office').replace('✦ ', '')} · Christmas Market`; }, [at]);
   if (!authReady) return <p className="muted" style={{ padding: 40 }}>{at('Loading…')}</p>;
   if (!user) return <Navigate to="/login?next=/admin" replace />;
@@ -405,12 +481,16 @@ export default function AdminApp() {
     <div className={`admin ${open ? 'nav-open' : ''}`}>
       <aside className="admin-nav" onClick={() => setOpen(false)}>
         <Link to="/admin" className="admin-brand">{at('✦ Elves’ Office')}</Link>
-        {NAV.map(([group, links]) => (
-          <div key={group} className="admin-nav-group">
-            <span>{at(group)}</span>
-            {links.map(([to, label]) => <NavLink key={to} end to={`/admin${to ? `/${to}` : ''}`}>{at(label)}</NavLink>)}
-          </div>
-        ))}
+        {NAV.map(([group, links, opts]) => {
+          const items = links.map(([to, label]) => <NavLink key={to} end to={`/admin${to ? `/${to}` : ''}`}>{at(label)}</NavLink>);
+          return opts?.collapsible ? (
+            <details key={group} className="admin-nav-group" open={links.some(([to]) => location.pathname === `/admin/${to}`)}>
+              <summary>{at(group)}</summary>{items}
+            </details>
+          ) : (
+            <div key={group} className="admin-nav-group"><span>{at(group)}</span>{items}</div>
+          );
+        })}
         <LangSwitch />
         <Link to="/" className="admin-back">{at('← Back to the store')}</Link>
       </aside>
@@ -424,6 +504,7 @@ export default function AdminApp() {
           <Route path="orders/:number" element={<OrderDetail />} />
           <Route path="customers" element={<Customers />} />
           <Route path="customers/:id" element={<CustomerDetail />} />
+          <Route path="pioneer-links" element={<PioneerLinks />} />
           <Route path=":entity" element={<CrudRoute />} />
         </Routes>
       </main>

@@ -19,12 +19,16 @@ export function originCheck(req, _res, next) {
   next(forbidden('Request origin not allowed.'));
 }
 
-const limiter = (windowMs, limit, message) =>
-  rateLimit({ windowMs, limit, standardHeaders: 'draft-7', legacyHeaders: false, handler: (req, res, _next, opts) => res.status(opts.statusCode).json({ error: { code: 'rate_limited', message: tr(req.locale, message) } }) });
+const limiter = (windowMs, limit, message, extra = {}) =>
+  rateLimit({ windowMs, limit, standardHeaders: 'draft-7', legacyHeaders: false, ...extra, handler: (req, res, _next, opts) => res.status(opts.statusCode).json({ error: { code: 'rate_limited', message: tr(req.locale, message) } }) });
 
 // Development allows more requests so automated UI sweeps don't trip it; production stays strict.
 export const globalLimiter = limiter(60_000, isProd ? 300 : 3000, 'Too many requests — the elves need a short break.');
 export const authLimiter = limiter(15 * 60_000, 20, 'Too many sign-in attempts. Please wait a few minutes.');
 export const gameLimiter = limiter(60_000, 40, 'Slow down, snow champion.');
-export const pioneerLimiter = limiter(15 * 60_000, 10, 'Too many card attempts. Please wait before trying again.');
+// Card verification attempts: per signed-in account (so people sharing an IP don't block each other)
+// plus a looser per-IP cap. The Pioneer system additionally locks a card after repeated wrong codes.
+const pioneerPerAccount = limiter(15 * 60_000, 8, 'Too many card attempts. Please wait before trying again.', { keyGenerator: (req) => `user:${req.user?.id ?? req.ip}` });
+const pioneerPerIp = limiter(15 * 60_000, 30, 'Too many card attempts. Please wait before trying again.');
+export const pioneerLimiter = [pioneerPerIp, pioneerPerAccount];
 export const writeLimiter = limiter(60_000, 30, 'Too many submissions. Please try again shortly.');

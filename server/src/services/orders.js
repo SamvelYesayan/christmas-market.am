@@ -6,12 +6,13 @@ import { findCart, loadCartLines } from './cart.js';
 import { awardAchievement } from './rewards.js';
 import { getProvider } from '../integrations/payments/index.js';
 import { currentLocale, loc, tr } from '../i18n/index.js';
+import { pioneer } from '../integrations/pioneer/index.js';
 
 export const ORDER_STATUSES = ['pending_payment', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
 
 export async function hasActivePioneer(db, userId) {
   if (!userId) return false;
-  const { rows } = await db.query(`SELECT 1 FROM pioneer_links WHERE user_id=$1 AND status='active'`, [userId]);
+  const { rows } = await db.query(`SELECT 1 FROM pioneer_links WHERE user_id=$1 AND status='active' AND provider=$2`, [userId, pioneer.mode]);
   return rows.length > 0;
 }
 

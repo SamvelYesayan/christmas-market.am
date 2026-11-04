@@ -1,6 +1,8 @@
 // End-to-end API tests against a running server with demo data (npm run seed:demo).
 //   API_URL=http://localhost:4000 npm test
-// Requires PAYMENTS_TEST_MODE=true, PIONEER_MODE=sandbox and ADVENT_DATE_OVERRIDE in December.
+// Requires PAYMENTS_TEST_MODE=true and ADVENT_DATE_OVERRIDE in December.
+// Pioneer tests need PIONEER_MODE=magical pointing at a NON-PRODUCTION Pioneer instance and
+// PIONEER_TEST_CARDS=<json file: [{number, cvv}, {number, cvv}]> with two cards created there; otherwise they are skipped.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -154,15 +156,55 @@ test('quiz never leaks answers and scores server-side', async () => {
   assert.equal(skip.status, 400);
 });
 
-test('pioneer sandbox: invalid card rejected, valid card linked, balance from adapter', async () => {
-  const bad = await user('POST', '/pioneer/link', { cardCode: '1234 5678 9012', verificationCode: '0000' });
+const pioneerCards = process.env.PIONEER_TEST_CARDS ? JSON.parse((await import('node:fs')).readFileSync(process.env.PIONEER_TEST_CARDS, 'utf8')) : null;
+const pioneerSkip = pioneerCards ? false : 'set PIONEER_TEST_CARDS to run against a non-production Pioneer instance';
+
+test('pioneer: format and wrong verification code are rejected', { skip: pioneerSkip }, async () => {
+  const [a] = pioneerCards;
+  const fmt = await user('POST', '/pioneer/link', { cardNumber: '1234', verificationCode: '12' });
+  assert.equal(fmt.status, 400);
+  const wrongCode = String((Number(a.cvv) + 1) % 1000).padStart(3, '0');
+  const bad = await user('POST', '/pioneer/link', { cardNumber: a.number, verificationCode: wrongCode });
   assert.equal(bad.status, 400);
-  const ok = await user('POST', '/pioneer/link', { cardCode: `9999${String(Date.now()).slice(-8)}`, verificationCode: '1225' });
+  assert.equal(bad.data.error.code, 'invalid_card');
+  const extra = await user('POST', '/pioneer/link', { cardNumber: a.number, verificationCode: a.cvv, balance: 999999 });
+  assert.equal(extra.status, 400, 'unknown fields (e.g. a balance) are refused');
+  const sum = await user('GET', '/pioneer/summary');
+  assert.equal(sum.data.linked, false);
+});
+
+test('pioneer: valid card connects; balance is the Pioneer system balance; secrets never returned', { skip: pioneerSkip }, async () => {
+  const [a] = pioneerCards;
+  const ok = await user('POST', '/pioneer/link', { cardNumber: a.number.replace(/(d{4})(d{4})/, '$1 $2'), verificationCode: a.cvv });
   assert.equal(ok.status, 201, JSON.stringify(ok.data));
-  assert.equal(ok.data.sandbox, true);
   const sum = await user('GET', '/pioneer/summary');
   assert.equal(sum.data.linked, true);
-  assert.equal(typeof sum.data.balance, 'number');
+  assert.equal(sum.data.balance.live, true);
+  assert.equal(sum.data.card.masked, `•••• ${a.number.slice(4)}`);
+  const raw = JSON.stringify(sum.data);
+  assert.ok(!raw.includes(a.number), 'full card number is never sent to the browser');
+  assert.ok(!/upstream_session|"verificationCode"|"cvv"|"token"/i.test(raw), 'no session token or verification code in the response');
+  if (a.expectedBalance != null) assert.equal(sum.data.balance.points, a.expectedBalance);
+});
+
+test('pioneer: one card per account, one account per card, disconnect needs confirmation', { skip: pioneerSkip }, async () => {
+  const [a, b] = pioneerCards;
+  const second = await user('POST', '/pioneer/link', { cardNumber: b.number, verificationCode: b.cvv });
+  assert.equal(second.status, 409);
+  assert.equal(second.data.error.code, 'already_linked');
+
+  const other = client();
+  const reg = await other('POST', '/auth/register', { name: 'Other Elf', email: `other-${Date.now()}@christmas-market.test`, password: 'snowy-password-123' });
+  assert.equal(reg.status, 201);
+  const taken = await other('POST', '/pioneer/link', { cardNumber: a.number, verificationCode: a.cvv });
+  assert.equal(taken.status, 409);
+  assert.equal(taken.data.error.code, 'card_taken');
+
+  assert.equal((await user('DELETE', '/pioneer/link', {})).status, 400, 'confirmation required');
+  assert.equal((await user('DELETE', '/pioneer/link', { confirm: true })).status, 200);
+  const now = await other('POST', '/pioneer/link', { cardNumber: a.number, verificationCode: a.cvv });
+  assert.equal(now.status, 201, 'a disconnected card can be connected again after verification');
+  assert.equal((await other('DELETE', '/pioneer/link', { confirm: true })).status, 200);
 });
 
 test('academy sorting assigns a house once', async () => {

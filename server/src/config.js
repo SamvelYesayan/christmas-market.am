@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+const unsetIfEmpty = (schema) => z.preprocess((v) => (v === '' ? undefined : v), schema);
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1');
 
 const schema = z.object({
@@ -31,15 +32,14 @@ const schema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
 
   // Magical Pioneer Card
-  PIONEER_MODE: z.enum(['disabled', 'http', 'sandbox']).default('disabled'),
-  PIONEER_API_BASE_URL: z.string().optional(),
-  PIONEER_API_KEY: z.string().optional(),
+  //   disabled → card connection unavailable (no simulation of any kind)
+  //   magical  → the real Magical Pioneer Card system (magical-full) at PIONEER_API_BASE_URL
+  PIONEER_MODE: z.enum(['disabled', 'magical']).default('disabled'),
+  PIONEER_API_BASE_URL: unsetIfEmpty(z.string().url().optional()),
+  PIONEER_PORTAL_URL: unsetIfEmpty(z.string().url().optional()), // where cardholders claim Pioneer rewards (default: {base}/pioneer-card)
   PIONEER_API_TIMEOUT_MS: z.coerce.number().default(8000),
-  PIONEER_PATH_VERIFY: z.string().default('/cards/verify'),
-  PIONEER_PATH_BALANCE: z.string().default('/cards/{cardId}/balance'),
-  PIONEER_PATH_HISTORY: z.string().default('/cards/{cardId}/transactions'),
-  PIONEER_PATH_CREDIT: z.string().default('/cards/{cardId}/credit'),
-  PIONEER_PATH_REDEEM: z.string().default('/cards/{cardId}/redeem'),
+  // 64 hex chars (32 bytes). Encrypts the Pioneer cardholder session stored per connected account.
+  PIONEER_SESSION_KEY: unsetIfEmpty(z.string().regex(/^[0-9a-fA-F]{64}$/, 'PIONEER_SESSION_KEY must be 64 hex characters').optional()),
   PIONEER_DISCOUNT_PERCENT: z.coerce.number().min(0).max(50).default(5),
 
   // Advent calendar: override "today" for development/QA only (YYYY-MM-DD). Ignored in production.
@@ -56,7 +56,11 @@ if (!parsed.success) {
 export const config = parsed.data;
 export const isProd = config.NODE_ENV === 'production';
 
-if (isProd && config.PIONEER_MODE === 'sandbox') {
-  console.error('PIONEER_MODE=sandbox is not allowed in production.');
-  process.exit(1);
+if (config.PIONEER_MODE === 'magical') {
+  const missing = ['PIONEER_API_BASE_URL', 'PIONEER_SESSION_KEY'].filter((k) => !config[k]);
+  if (missing.length) console.error(`PIONEER_MODE=magical needs ${missing.join(' and ')} — the card connection stays disabled until they are set.`);
+  if (isProd && config.PIONEER_API_BASE_URL && !config.PIONEER_API_BASE_URL.startsWith('https://')) {
+    console.error('PIONEER_API_BASE_URL must use https:// in production (card verification codes are sent to it).');
+    process.exit(1);
+  }
 }

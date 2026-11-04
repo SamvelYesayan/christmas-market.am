@@ -12,7 +12,7 @@ export async function getRule(db, key) {
 }
 
 async function activePioneerLink(db, userId) {
-  const { rows } = await db.query(`SELECT * FROM pioneer_links WHERE user_id = $1 AND status = 'active'`, [userId]);
+  const { rows } = await db.query(`SELECT * FROM pioneer_links WHERE user_id = $1 AND status = 'active' AND provider = $2`, [userId, pioneer.mode]);
   return rows[0] ?? null;
 }
 
@@ -76,10 +76,14 @@ export const publicGrant = (g) => g && ({
   createdAt: g.created_at,
 });
 
-/** Push pending Stardust to the linked Pioneer card. Safe to call repeatedly (idempotent references). */
+/**
+ * Push pending Stardust to the linked Pioneer card. Safe to call repeatedly (idempotent references).
+ * Only runs when the Pioneer system offers a credit endpoint; the real Magical Pioneer Card API does not,
+ * so Stardust then stays recorded in the store (status 'pending') and is never reported as transferred.
+ */
 export async function syncPioneerPoints(userId) {
-  if (!pioneer.configured) return;
-  const link = await one(`SELECT * FROM pioneer_links WHERE user_id=$1 AND status='active'`, [userId]);
+  if (!pioneer.configured || !pioneer.supportsCredit) return;
+  const link = await one(`SELECT * FROM pioneer_links WHERE user_id=$1 AND status='active' AND provider=$2`, [userId, pioneer.mode]);
   if (!link) return;
   const pending = await many(
     `SELECT * FROM reward_grants WHERE user_id=$1 AND points > 0 AND pioneer_sync_status IN ('pending','failed','no_card') ORDER BY created_at LIMIT 100`,
@@ -100,7 +104,7 @@ export async function syncPioneerPoints(userId) {
 
 /** Retries failed/pending syncs for everyone; run periodically from index.js. */
 export async function syncAllPending() {
-  if (!pioneer.configured) return;
+  if (!pioneer.configured || !pioneer.supportsCredit) return;
   const users = await many(
     `SELECT DISTINCT g.user_id FROM reward_grants g JOIN pioneer_links l ON l.user_id = g.user_id AND l.status='active'
       WHERE g.points > 0 AND g.pioneer_sync_status IN ('pending','failed','no_card') LIMIT 200`,

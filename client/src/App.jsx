@@ -54,18 +54,16 @@ function Page({ children }) {
 
 export default function App() {
   const location = useLocation();
-  const { persona, authReady, user, calm, refreshCart, refreshUser } = useApp();
+  const { calm, refreshCart, refreshUser } = useApp();
   const { lang, t } = useI18n();
   // Intro is decided once per page load (never on in-app navigation).
   const [intro, setIntro] = useState(() => introPlan(location.pathname, calm));
   const [gate, setGate] = useState(false);
   const isAdmin = location.pathname.startsWith('/admin');
-  const isPayTest = location.pathname.startsWith('/pay/test');
   const firstLang = useRef(lang);
 
-  useEffect(() => {
-    if (!intro && authReady && !persona?.welcomed && !user && !isAdmin && !isPayTest) setGate(true);
-  }, [intro, authReady, persona?.welcomed, user, isAdmin, isPayTest]);
+  // The welcome ritual (name + atmosphere) is optional: it never blocks shopping and only opens when the
+  // visitor chooses "Personalise" on the home page.
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });

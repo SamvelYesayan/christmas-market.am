@@ -11,6 +11,7 @@ import { Empty, GiftTag, Loader, Ribbon } from '../components/Common.jsx';
 import { payLabel, statusLabel } from './Order.jsx';
 import { LangSwitch, useI18n } from '../i18n/index.jsx';
 import { getIntroPref, setIntroPref } from '../effects/introPrefs.js';
+import MyPioneerCard from '../components/PioneerCard.jsx';
 
 const ACH_ICON = { snowflake: 'snowflake', crest: 'star', sleigh: 'sleigh', door: 'door', star: 'star', gift: 'giftbox', book: 'book', eye: 'key', card: 'card', heart: 'heart' };
 
@@ -43,7 +44,7 @@ function Overview({ dash }) {
           </div>
         </div>
         <div className="tile"><span className="eyebrow">{t('common.stardust')}</span><b className="tile-num">{dash.stardust} ✨</b><small className="muted">{t('account.earned')}</small></div>
-        <div className="tile"><span className="eyebrow">{t('account.card')}</span>{user.pioneer ? <><b className="tile-num" dir="ltr">{user.pioneer.cardMasked}</b><Link className="link" to="/pioneer">{t('account.seePoints')}</Link></> : <Link className="link" to="/pioneer">{t('account.linkCard')}</Link>}</div>
+        <div className="tile"><span className="eyebrow">{t('pc.tab')}</span>{user.pioneer ? <><b className="tile-num" dir="ltr">{user.pioneer.cardMasked}</b><Link className="link" to="/account/pioneer">{t('pc.manage')}</Link></> : <><small className="muted">{t('pc.none')}</small><Link className="link" to="/account/pioneer">{t('pc.connectShort')}</Link></>}</div>
         <div className="tile"><span className="eyebrow">{t('account.advent')}</span><b className="tile-num">{dash.advent.opened}/24</b><span className="bar"><span style={{ width: `${(dash.advent.opened / 24) * 100}%` }} /></span></div>
         <div className="tile"><span className="eyebrow">{t('account.atmosphere')}</span><b>{atmo ? t(`atmo.${atmo}`) : t('account.notChosen')}</b>{atmo && <small className="muted">{t(`atmo.${atmo}Blurb`)}</small>}</div>
         <div className="tile"><span className="eyebrow">{t('account.wishlist')}</span><b className="tile-num">{dash.wishlistCount}</b><Link className="link" to="/account/wishlist">{t('account.open')}</Link></div>
@@ -91,6 +92,7 @@ function Rewards({ dash }) {
   const { t, dateShort } = useI18n();
   return (
     <div className="stack">
+      <section><h3>{t('account.achievements')}</h3><Achievements dash={dash} /></section>
       {dash.coupons.length > 0 && <div className="coupons">{dash.coupons.map((c) => <CouponTicket key={c.code} c={c} />)}</div>}
       <h3>{t('account.history')}</h3>
       {dash.rewards.length === 0 ? <p className="muted">{t('account.noRewards')}</p> : (
@@ -183,6 +185,11 @@ function Settings() {
             </select>
           </div>
         </div>
+        <div className="panel pad">
+          <h3>{t('pc.connectedCard')}</h3>
+          {user.pioneer ? <p><b dir="ltr">{user.pioneer.cardMasked}</b>{user.pioneer.holderName ? <span className="muted"> · {user.pioneer.holderName}</span> : null}</p> : <p className="muted">{t('pc.none')}</p>}
+          <Link className="link" to="/account/pioneer">{user.pioneer ? t('pc.manage') : t('pc.connectShort')}</Link>
+        </div>
         <form className="panel pad" onSubmit={changePw}>
           <h3>{t('account.password')}</h3>
           <div className="field"><label htmlFor="cp">{t('account.current')}</label><input id="cp" type="password" autoComplete="current-password" value={pw.currentPassword} onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })} required /></div>
@@ -209,7 +216,7 @@ export default function Account() {
   useEffect(() => { document.title = `${t('account.title')} · ${t('brand.name')}`; }, [t]);
   if (!authReady) return <Loader />;
   if (!user) return <Navigate to="/login?next=/account" replace />;
-  const tabs = [['', 'overview'], ['orders', 'orders'], ['wishlist', 'wishlist'], ['rewards', 'rewards'], ['achievements', 'achievements'], ['settings', 'settings']];
+  const tabs = [['', 'account.overview'], ['orders', 'account.orders'], ['pioneer', 'pc.tab'], ['wishlist', 'account.wishlist'], ['rewards', 'account.rewards'], ['settings', 'account.settings']];
   return (
     <div className="wrap cottage">
       <header className="page-head cottage-head">
@@ -219,7 +226,7 @@ export default function Account() {
         </div>
       </header>
       <nav className="cottage-tabs" aria-label={t('account.tabs')}>
-        {tabs.map(([to, l]) => <NavLink key={to} end to={`/account${to ? `/${to}` : ''}`} className="cottage-tab">{t(`account.${l}`)}</NavLink>)}
+        {tabs.map(([to, l]) => <NavLink key={to} end to={`/account${to ? `/${to}` : ''}`} className="cottage-tab">{t(l)}</NavLink>)}
       </nav>
       {!state.data ? <Loader /> : (
         <Routes>
@@ -227,7 +234,8 @@ export default function Account() {
           <Route path="orders" element={<Orders dash={state.data} />} />
           <Route path="wishlist" element={<Wishlist />} />
           <Route path="rewards" element={<Rewards dash={state.data} />} />
-          <Route path="achievements" element={<Achievements dash={state.data} />} />
+          <Route path="pioneer" element={<MyPioneerCard />} />
+          <Route path="achievements" element={<Navigate to="/account/rewards" replace />} />
           <Route path="settings" element={<Settings />} />
         </Routes>
       )}

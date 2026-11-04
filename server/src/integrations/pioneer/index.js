@@ -1,9 +1,8 @@
 import { config } from '../../config.js';
-import { HttpPioneerClient } from './httpClient.js';
-import { SandboxPioneerClient } from './sandboxClient.js';
+import { MagicalPioneerClient } from './magicalClient.js';
 
 export class PioneerError extends Error {
-  /** code: not_configured | invalid_card | insufficient_points | upstream_error */
+  /** code: not_configured | invalid_card | card_inactive | too_many_attempts | card_locked | service_busy | session_expired | upstream_error */
   constructor(code, message) {
     super(message);
     this.code = code;
@@ -13,31 +12,26 @@ export class PioneerError extends Error {
 class DisabledPioneerClient {
   mode = 'disabled';
   configured = false;
+  supportsCredit = false;
+  supportsRedeem = false;
+  portalUrl = null;
   #fail() {
     throw new PioneerError('not_configured', 'The Magical Pioneer Card connection is not available yet.');
   }
-  async verifyCard() { this.#fail(); }
-  async getBalance() { this.#fail(); }
-  async getHistory() { this.#fail(); }
-  async creditPoints() { this.#fail(); }
-  async redeemPoints() { this.#fail(); }
+  async login() { this.#fail(); }
+  async me() { this.#fail(); }
+  async transactions() { this.#fail(); }
+  async rewards() { this.#fail(); }
+  async announcements() { this.#fail(); }
+  async logout() {}
 }
 
-/**
- * PioneerClient contract (all methods async):
- *  verifyCard(cardCode, verificationCode) → { cardId, maskedNumber, tier, holderName? }
- *  getBalance(cardId)                     → { points, tier }
- *  getHistory(cardId)                     → [{ id, date, type, points, description }]
- *  creditPoints(cardId, points, reference, description) → { balance? }
- *  redeemPoints(cardId, points, reference, description) → { balance? }
- * `reference` is an idempotency key — the upstream API must treat repeats as no-ops.
- */
+// PIONEER_MODE=magical connects to the real Magical Pioneer Card system. Anything else (or missing
+// settings) leaves the connection disabled — the store never simulates a card or a balance.
 function build() {
-  if (config.PIONEER_MODE === 'http') {
-    if (!config.PIONEER_API_BASE_URL || !config.PIONEER_API_KEY) return new DisabledPioneerClient();
-    return new HttpPioneerClient(config, PioneerError);
+  if (config.PIONEER_MODE === 'magical' && config.PIONEER_API_BASE_URL && config.PIONEER_SESSION_KEY) {
+    return new MagicalPioneerClient(config, PioneerError);
   }
-  if (config.PIONEER_MODE === 'sandbox') return new SandboxPioneerClient(PioneerError);
   return new DisabledPioneerClient();
 }
 

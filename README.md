@@ -78,7 +78,8 @@ Admin panel: http://localhost:5173/admin
 **Development switches in `server/.env`:**
 - `PAYMENTS_TEST_MODE=true` → a clearly labelled **TEST** payment method with an approve/decline page.
   Test orders are flagged `is_test`, show a TEST banner and are excluded from revenue analytics.
-- `PIONEER_MODE=sandbox` → a labelled sandbox card system (cards: 12 digits starting `9999`, code `1225`).
+- `PIONEER_MODE=magical` + `PIONEER_API_BASE_URL` + `PIONEER_SESSION_KEY` → connect to the real Magical Pioneer Card system.
+  For local testing run `magical-full` against a throwaway database (see the Pioneer integration README).
 - `ADVENT_DATE_OVERRIDE=2026-12-08` → pretend it is that date so December doors can be opened (ignored in production).
 
 ---
@@ -111,7 +112,7 @@ Everything is documented in [`server/.env.example`](server/.env.example). Key on
 | `TRUST_PROXY` | `1` behind one reverse proxy so rate limits see real IPs |
 | `PAYMENTS_TEST_MODE` | Enables the TEST payment method (forced off in production) |
 | `IDRAM_*`, `AMERIA_*`, `ARCA_*`, `STRIPE_*`, `TELCELL_*` | Payment provider credentials — a method appears at checkout only when configured |
-| `PIONEER_MODE`, `PIONEER_API_*`, `PIONEER_PATH_*` | Magical Pioneer Card connection |
+| `PIONEER_MODE`, `PIONEER_API_BASE_URL`, `PIONEER_SESSION_KEY`, `PIONEER_PORTAL_URL` | Magical Pioneer Card connection |
 | `PIONEER_DISCOUNT_PERCENT` | Automatic member discount (default 5) |
 | `STORE_TIMEZONE` | Day boundaries for Advent, daily games and challenges (default Asia/Yerevan) |
 
@@ -130,11 +131,17 @@ Secrets live only in the server environment; the client bundle never contains ke
   `GET …/payments/{provider}/return?payment=…`.
 
 ## 6. Magical Pioneer Card
-No real Pioneer API was available, so nothing is faked: in the default `PIONEER_MODE=disabled` the lodge shows
-"opening soon" and no balances. Set `PIONEER_MODE=http` with `PIONEER_API_BASE_URL` / `PIONEER_API_KEY`
-(and override `PIONEER_PATH_*` if routes differ). The required operations and payloads are documented in the
-integration README. Stardust earned on the site is stored locally and credited to the card with idempotent
-references (retried every 10 minutes).
+Customers connect their existing card in **Account → My Pioneer Card** with the 8-digit card number and 3-digit
+verification code. The store verifies them with the real Pioneer system (`magical-full`) and then shows the
+cardholder name, masked number, live points balance, rewards, announcements and history read from it. A card can be
+connected to one account only; disconnecting asks for confirmation. Admins see connections (read-only) under
+**Pioneer Card → Card connections**; points can only be changed in the Pioneer admin.
+
+With `PIONEER_MODE=disabled` (default) the section shows "coming soon" — nothing is simulated.
+**Before going live** (details in the integration README): deploy the Pioneer module, exempt the store server from the
+Pioneer per-IP login limit (15 per 15 min / 60 per day), and set `PIONEER_MODE=magical`, `PIONEER_API_BASE_URL`
+(https) and `PIONEER_SESSION_KEY`. Stardust earned in the store stays in the store until the Pioneer system offers a
+credit endpoint.
 
 ## 7. Tests
 With the API running against demo data (test mode + sandbox + an Advent date override in December):
@@ -158,7 +165,7 @@ NODE_ENV=production npm start      # serves /api, /uploads and the SPA
 ```
 Production checklist:
 - Run behind HTTPS (nginx/Caddy/Render/Fly) with `TRUST_PROXY=1`; cookies become `Secure` automatically.
-- `APP_ORIGIN` and `PUBLIC_API_URL` = your public https origin. `PAYMENTS_TEST_MODE=false`, `PIONEER_MODE` ≠ sandbox
+- `APP_ORIGIN` and `PUBLIC_API_URL` = your public https origin. `PAYMENTS_TEST_MODE=false`, `PIONEER_API_BASE_URL` uses https
   (the server refuses to start with the sandbox in production).
 - Persist `server/uploads/` (or mount object storage there) — product photos live there.
 - Background jobs (expiring unpaid orders, Pioneer sync, session cleanup) run in-process; with multiple instances,
@@ -182,7 +189,8 @@ sensitive fields redacted from logs.
 
 ## 10. Known gaps / next steps
 - **Transactional email** (order confirmations, password reset) is not wired — add an SMTP/ESP provider.
-- **Armenian / Russian translations** — copy is English; fonts already include Armenian glyphs.
+- **Pioneer Card production setup** — see §6 (Pioneer per-IP login limit, credit/redeem endpoints).
+- **Russian translation** — Armenian (default) and English are complete.
 - **Lottie** is not used (no licensed Lottie files); SVG/CSS/Canvas/Three.js cover the motion design.
 - Payment adapters need verification against each provider's sandbox before launch (see §5).
 - Product photos: demo products use original procedural SVG illustrations; upload real photos in the admin.

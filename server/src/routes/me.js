@@ -9,6 +9,7 @@ import { productCard } from '../services/catalog.js';
 import { publicGrant, stardustBalance } from '../services/rewards.js';
 import { adventToday, dateParts } from '../lib/time.js';
 import { loc } from '../i18n/index.js';
+import { pioneer } from '../integrations/pioneer/index.js';
 
 export const profileSchema = z.object({
   displayName: z.string().trim().min(1).max(60),
@@ -29,12 +30,12 @@ export async function loadMe(userId) {
     `SELECT u.id, u.email, u.name, u.phone, u.role, u.marketing_consent, u.personalization_consent, u.created_at,
             p.display_name, p.atmosphere, p.preferences, p.identity, p.sorted_at,
             h.slug AS house_slug, h.i18n AS house_i18n, h.name AS house_name, h.color AS house_color, h.accent AS house_accent, h.animal AS house_animal, h.motto AS house_motto,
-            l.card_masked, l.tier AS pioneer_tier, l.is_sandbox AS pioneer_sandbox
+            l.card_masked, l.holder_name AS pioneer_holder
        FROM users u
        LEFT JOIN user_profiles p ON p.user_id = u.id
        LEFT JOIN houses h ON h.id = p.house_id
-       LEFT JOIN pioneer_links l ON l.user_id = u.id AND l.status = 'active'
-      WHERE u.id = $1`, [userId]);
+       LEFT JOIN pioneer_links l ON l.user_id = u.id AND l.status = 'active' AND l.provider = $2
+      WHERE u.id = $1`, [userId, pioneer.mode]);
   if (!user) return { user: null };
   return {
     user: {
@@ -52,7 +53,7 @@ export async function loadMe(userId) {
         identity: loc(user.identity),
         house: user.house_slug ? { slug: user.house_slug, color: user.house_color, accent: user.house_accent, ...pickHouse(loc({ name: user.house_name, animal: user.house_animal, motto: user.house_motto, i18n: user.house_i18n })) } : null,
       },
-      pioneer: user.card_masked ? { cardMasked: user.card_masked, tier: user.pioneer_tier, sandbox: user.pioneer_sandbox } : null,
+      pioneer: user.card_masked ? { cardMasked: user.card_masked, holderName: user.pioneer_holder } : null,
     },
   };
 }

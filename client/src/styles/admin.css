@@ -83,3 +83,10 @@
   .admin-grid, .admin-form-grid { grid-template-columns: 1fr; }
   .attr-row { grid-template-columns: 1fr; gap: 0.3rem; }
 }
+
+/* Collapsible menu group (seasonal games) */
+details.admin-nav-group > summary { cursor: pointer; list-style: none; font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); padding: 0.2rem 0; }
+details.admin-nav-group > summary::-webkit-details-marker { display: none; }
+details.admin-nav-group > summary::after { content: ' ▸'; }
+details.admin-nav-group[open] > summary::after { content: ' ▾'; }
+.admin-card .ok { color: #7fe0c4; }

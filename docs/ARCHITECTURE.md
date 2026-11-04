@@ -62,7 +62,7 @@ christmas-market.am/
 │     ├─ middleware/        auth, validate, rateLimit, errors, csrf-origin
 │     ├─ services/          pricing, orders, rewards, gamesValidator, recommendations
 │     ├─ integrations/
-│     │   ├─ pioneer/       PioneerClient interface + http adapter + sandbox adapter
+│     │   ├─ pioneer/       magicalClient (real Magical Pioneer Card API) + disabled client
 │     │   └─ payments/      PaymentProvider registry: cash, test, idram, ameriabank, arca, stripe
 │     └─ routes/            REST routers (public, account, admin)
 └─ client/                  React 18 · Vite · React Router · Framer Motion · GSAP · Three.js
@@ -101,19 +101,15 @@ christmas-market.am/
   each provider's merchant documentation.
 
 ### Magical Pioneer Card integration
-No Pioneer API was provided, so the backend ships an **integration layer**, not fake data:
-- `PIONEER_MODE=disabled` (default): link UI shows "coming soon", no balances are displayed.
-- `PIONEER_MODE=http`: `HttpPioneerClient` calls the configured endpoints
-  (`PIONEER_API_BASE_URL`, paths overridable per operation, `PIONEER_API_KEY` sent server-side only).
-- `PIONEER_MODE=sandbox`: development-only adapter (refuses to start when `NODE_ENV=production`), every
-  response is labelled `sandbox: true` and the UI shows a SANDBOX ribbon.
+The store connects to the real Magical Pioneer Card system (`magical-full`) through its existing cardholder API:
+- `PIONEER_MODE=disabled` (default): the account shows "coming soon", no balances are displayed.
+- `PIONEER_MODE=magical`: `MagicalPioneerClient` verifies card number + code with `POST /api/pioneer/login` and reads
+  `/me`, `/transactions`, `/rewards`, `/announcements` with the resulting cardholder session (stored encrypted).
+- Ownership (one active link per card and per account) lives in `pioneer_links`; every event in `pioneer_link_events`.
+Full details and the production checklist: `server/src/integrations/pioneer/README.md`.
 
-Operations the real API must provide (see `server/src/integrations/pioneer/README.md`):
-`verifyCard(cardCode, verificationCode) → {cardId, holderName?, tier}`, `getBalance(cardId)`,
-`getHistory(cardId)`, `creditPoints(cardId, points, reference)`, `redeemPoints(cardId, points, reference)`.
-We store only `card_id` (external reference) + masked number; never the verification code.
-Points earned in games are written to `reward_grants` with `pioneer_sync_status=pending` and pushed by
-`creditPoints` with an idempotency reference.
+Points earned in store games are recorded in `reward_grants` (`pioneer_sync_status=pending`); they are pushed to the
+card only if the Pioneer system adds a credit endpoint (it has none today).
 
 ## 3. Database schema
 See `server/migrations/001_init.sql` (authoritative). Main groups:
@@ -139,7 +135,7 @@ Cart: `GET /cart`, `POST /cart/items`, `PATCH|DELETE /cart/items/:id`, `POST|DEL
 Checkout: `GET /checkout/options`, `POST /checkout/quote`, `POST /orders`, `POST /orders/:number/pay`,
 `GET /orders`, `GET /orders/:number`, `GET /orders/track?number=&email=`
 Payments: `POST /payments/:provider/callback`, `GET /payments/test/:id`, `POST /payments/test/:id/decide`
-Pioneer: `GET /pioneer/status`, `POST|DELETE /pioneer/link`, `GET /pioneer/summary`,
+Pioneer: `GET /pioneer/status`, `POST|DELETE /pioneer/link`, `POST /pioneer/refresh`, `GET /pioneer/summary`,
 `GET /pioneer/offers`, `POST /pioneer/offers/:id/redeem`
 Academy: `GET /academy/houses`, `GET /academy/sorting`, `POST /academy/sort`, `GET /academy/me`
 Advent: `GET /advent`, `POST /advent/:day/open`
