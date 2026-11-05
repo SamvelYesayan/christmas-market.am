@@ -119,6 +119,13 @@ const HY = {
   'No Pioneer Card is connected to your account.': 'Ձեր հաշվին Պիոներ քարտ միացված չէ։',
   'Pioneer points are spent in the Pioneer portal. This store cannot deduct points.': 'Պիոներ միավորներն օգտագործվում են Պիոներ պորտալում։ Խանութը չի կարող միավորներ հանել։',
   'No connected Pioneer Card for this customer.': 'Այս հաճախորդի հաշվին միացված Պիոներ քարտ չկա։',
+  // christmas calendar (31 days)
+  'The Christmas Calendar opens on 1 December.': 'Ամանորյա օրացույցը բացվում է դեկտեմբերի 1-ին։',
+  'This year’s Christmas Calendar has ended. See you next December!': 'Այս տարվա Ամանորյա օրացույցն ավարտվել է։ Կհանդիպենք հաջորդ դեկտեմբերին։',
+  'You have already claimed today’s gift. Come back tomorrow!': 'Այսօրվա նվերն արդեն ստացել եք։ Վերադարձեք վաղը։',
+  'The Grand Prize is only for those who claimed a gift on every day from 1 to 30 December.': 'Գլխավոր մրցանակը միայն նրանց համար է, ովքեր նվեր են ստացել դեկտեմբերի 1-ից 30-ը ամեն օր։',
+  'Please choose one of today’s gifts.': 'Խնդրում ենք ընտրել այսօրվա նվերներից մեկը։',
+  'This calendar day already has claims and cannot be moved or deleted.': 'Այս օրվա համար արդեն նվերներ են ստացվել, այն հնարավոր չէ տեղափոխել կամ ջնջել։',
   // advent & games
   'The Clocktower opens on the 1st of December.': 'Ժամացույցի աշտարակը բացվում է դեկտեմբերի 1-ին։',
   'This door has not been prepared yet.': 'Այս դուռը դեռ պատրաստված չէ։',
@@ -162,6 +169,8 @@ const HY_PATTERNS = [
   [/^Only (\d+) left in stock\.$/, (m) => `Պահեստում մնացել է ընդամենը ${m[1]} հատ։`],
   [/^Only (\d+) × (.+) \((.+)\) left\.$/, (m) => `«${m[2]}» (${m[3]})՝ մնացել է ընդամենը ${m[1]} հատ։`],
   [/^(.+) is no longer available\.$/, (m) => `«${m[1]}»-ն այլևս հասանելի չէ։`],
+  [/^Day (\d+) is still locked\. Come back on \d+ December!$/, (m) => `${m[1]}-րդ օրը դեռ փակ է։ Վերադարձեք դեկտեմբերի ${m[1]}-ին։`],
+  [/^Day (\d+) has passed\. Missed days cannot be opened later\.$/, (m) => `${m[1]}-րդ օրն անցել է։ Բաց թողած օրերը հետո բացել հնարավոր չէ։`],
   [/^Patience! Door (\d+) opens on \d+ December\.$/, (m) => `Համբերությո՛ւն։ ${m[1]}-րդ դուռը կբացվի դեկտեմբերի ${m[1]}-ին։`],
   [/^This code needs a subtotal of at least (.+)\.$/, (m) => `Այս կոդի համար պատվերի գումարը պետք է լինի առնվազն ${m[1]}։`],
   [/^Pioneer service error \((\d+)\)\.$/, () => HY['The Pioneer Lodge is not answering right now. Please try again shortly.']],

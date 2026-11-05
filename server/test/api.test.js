@@ -49,7 +49,8 @@ test('catalog lists products and details', async () => {
   const detail = await guest('GET', `/products/glass-pomegranate`);
   assert.equal(detail.status, 200);
   assert.ok(detail.data.product.variants.length >= 1);
-  variantId = detail.data.product.variants[0].id;
+  // Earlier checkout runs use up stock, so take a variant that still has some.
+  variantId = (detail.data.product.variants.find((v) => v.stock > 1) ?? detail.data.product.variants[0]).id;
 });
 
 test('registers a user with personalization', async () => {
@@ -79,7 +80,7 @@ test('cart: add, coupon validation, quote', async () => {
 });
 
 test('checkout with cash on delivery creates a confirmed order and reserves stock', async () => {
-  const before = (await guest('GET', '/products/glass-pomegranate')).data.product.variants[0].stock;
+  const before = (await guest('GET', '/products/glass-pomegranate')).data.product.variants.find((v) => v.id === variantId).stock;
   const r = await user('POST', '/orders', {
     customer: { name: 'Test Elf', email, phone: '+374 91 000000' },
     delivery: { zone: 'yerevan', city: 'Yerevan', address: '1 Snow Street' },
@@ -89,7 +90,7 @@ test('checkout with cash on delivery creates a confirmed order and reserves stoc
   assert.equal(r.data.order.status, 'confirmed');
   assert.equal(r.data.order.paymentStatus, 'cod');
   assert.equal(r.data.order.subtotal, 13000);
-  const after = (await guest('GET', '/products/glass-pomegranate')).data.product.variants[0].stock;
+  const after = (await guest('GET', '/products/glass-pomegranate')).data.product.variants.find((v) => v.id === variantId).stock;
   assert.equal(after, before - 2);
   const cart = await user('GET', '/cart');
   assert.equal(cart.data.count, 0);
@@ -114,17 +115,15 @@ test('test payments are flagged and only succeed after explicit approval', async
   assert.equal(hidden.status, 404);
 });
 
-test('advent: past doors open once, future doors are locked', async () => {
+test('christmas calendar: 31 days, only today can be claimed (full scenarios in calendar.test.js)', async () => {
   const cal = await user('GET', '/advent');
-  const unlocked = cal.data.unlockedThrough;
-  assert.ok(unlocked >= 2, 'set ADVENT_DATE_OVERRIDE to a December date for this test');
-  const open = await user('POST', '/advent/2/open');
-  assert.equal(open.status, 200);
-  assert.ok(open.data.content.reward?.couponCode);
-  const again = await user('POST', '/advent/2/open');
-  assert.equal(again.data.newReward, false);
-  assert.equal(again.data.content.reward.couponCode, open.data.content.reward.couponCode);
-  if (unlocked < 24) assert.equal((await user('POST', '/advent/24/open')).status, 403);
+  assert.equal(cal.status, 200);
+  assert.equal(cal.data.days.length, 31);
+  const today = cal.data.todayDay;
+  assert.ok(today >= 2, 'set ADVENT_DATE_OVERRIDE to a December date for this test');
+  assert.equal(cal.data.days[today].status, today < 31 ? 'locked' : undefined);
+  assert.equal((await user('POST', '/advent/claim', { day: today - 1 })).status, 403, 'yesterday cannot be claimed late');
+  assert.equal((await user('POST', '/advent/2/open')).status, 404, 'the old catch-up endpoint is gone');
 });
 
 test('wheel: one spin per day, server picks the result', async () => {

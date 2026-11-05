@@ -45,7 +45,7 @@ function Overview({ dash }) {
         </div>
         <div className="tile"><span className="eyebrow">{t('common.stardust')}</span><b className="tile-num">{dash.stardust} ✨</b><small className="muted">{t('account.earned')}</small></div>
         <div className="tile"><span className="eyebrow">{t('pc.tab')}</span>{user.pioneer ? <><b className="tile-num" dir="ltr">{user.pioneer.cardMasked}</b><Link className="link" to="/account/pioneer">{t('pc.manage')}</Link></> : <><small className="muted">{t('pc.none')}</small><Link className="link" to="/account/pioneer">{t('pc.connectShort')}</Link></>}</div>
-        <div className="tile"><span className="eyebrow">{t('account.advent')}</span><b className="tile-num">{dash.advent.opened}/24</b><span className="bar"><span style={{ width: `${(dash.advent.opened / 24) * 100}%` }} /></span></div>
+        <div className="tile"><span className="eyebrow">{t('account.advent')}</span><b className="tile-num">{dash.advent.opened}/{dash.advent.total}</b><span className="bar"><span style={{ width: `${(dash.advent.opened / dash.advent.total) * 100}%` }} /></span></div>
         <div className="tile"><span className="eyebrow">{t('account.atmosphere')}</span><b>{atmo ? t(`atmo.${atmo}`) : t('account.notChosen')}</b>{atmo && <small className="muted">{t(`atmo.${atmo}Blurb`)}</small>}</div>
         <div className="tile"><span className="eyebrow">{t('account.wishlist')}</span><b className="tile-num">{dash.wishlistCount}</b><Link className="link" to="/account/wishlist">{t('account.open')}</Link></div>
       </div>

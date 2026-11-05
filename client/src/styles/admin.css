@@ -111,3 +111,29 @@ details.admin-nav-group[open] > summary::after { content: ' ▾'; }
 .wish-edit .field span { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
 .wish-pager { justify-content: center; gap: 1rem; margin-top: 1rem; align-items: center; }
 .btn.danger { color: #ff8a9a; }
+
+/* Christmas Calendar admin */
+.cal-admin-grid { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.cal-admin-day { display: grid; gap: 0.35rem; align-content: start; padding: 0.8rem 0.9rem; }
+.cal-admin-day.is-grand { grid-column: 1 / -1; border-color: rgba(242, 196, 109, 0.7); }
+.cal-admin-day.is-today { box-shadow: 0 0 0 2px var(--gold); }
+.cal-admin-day.is-empty { opacity: 0.7; border-style: dashed; }
+.cal-admin-day.is-off .cal-admin-title { text-decoration: line-through; opacity: 0.7; }
+.cal-admin-num { font-family: var(--font-display); font-size: 1.5rem; }
+.cal-admin-title { margin: 0; font-weight: 600; min-height: 1.4em; }
+.cal-editor { display: grid; gap: 0.9rem; margin-top: 1rem; }
+.cal-editor h2 { margin: 0; }
+.cal-lang-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem 1rem; }
+.cal-lang-grid .field { min-width: 0; }
+.cal-admin-thumb { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+.cal-check-field { display: flex; flex-direction: row; align-items: center; gap: 0.5rem; align-self: end; }
+.cal-options-admin { display: grid; gap: 0.6rem; }
+.cal-options-admin h3 { margin: 0; }
+.cal-option-admin { display: grid; gap: 0.6rem; }
+.cal-coupon { align-items: end; }
+.cal-days-cell { max-width: 260px; font-variant-numeric: tabular-nums; }
+.cal-elig { font-size: 0.85rem; padding: 0.15rem 0.55rem; border-radius: 999px; border: 1px solid var(--line); white-space: nowrap; }
+.cal-elig.st-qualified, .cal-elig.st-entered { background: var(--gold); color: #1a1205; border-color: var(--gold); }
+.cal-elig.st-on_track { color: var(--gold-hi); }
+.cal-elig.st-lost { opacity: 0.7; }
+@media (max-width: 700px) { .cal-lang-grid { grid-template-columns: 1fr; } }

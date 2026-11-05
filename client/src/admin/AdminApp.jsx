@@ -6,6 +6,7 @@ import { useApp } from '../state/AppState.jsx';
 import { money } from '../lib.js';
 import Crud from './Crud.jsx';
 import ProductEditor from './ProductEditor.jsx';
+import AdminCalendar from './Calendar.jsx';
 import { PAY_STATUSES, STATUSES, payLabel, statusLabel } from '../pages/Order.jsx';
 import { LangSwitch } from '../i18n/index.jsx';
 
@@ -484,9 +485,6 @@ const CONFIGS = {
   'pioneer-offers': { title: 'Member offers', endpoint: 'pioneer-offers', description: 'Shown to Pioneer members on the Pioneer Card page. Points cannot be spent in the store: the Pioneer system offers no way to deduct points, so Pioneer rewards are claimed in the Pioneer portal.',
     fields: [{ name: 'title', label: 'Title' }, { name: 'description', label: 'Description', type: 'textarea', nullable: true }, { name: 'kind', label: 'Kind', type: 'select', options: ['redeem_gift', 'discount', 'exclusive_product'], default: 'redeem_gift' }, { name: 'points_cost', label: 'Points cost', type: 'number', nullable: true }, { name: 'discount_percent', label: 'Discount %', type: 'number', nullable: true, default: '' }, { name: 'product_id', label: 'Product ID (uuid)', nullable: true }, { name: 'stock', label: 'Stock (empty = unlimited)', type: 'number', nullable: true, default: '' }, { name: 'starts_at', label: 'Starts', type: 'datetime' }, { name: 'ends_at', label: 'Ends', type: 'datetime' }, { name: 'is_active', label: 'Active', type: 'bool' }],
     columns: [{ key: 'title', label: 'Title' }, { key: 'kind', label: 'Kind' }, { key: 'points_cost', label: 'Points' }, { key: 'stock', label: 'Stock' }, { key: 'is_active', label: 'Active', render: (r) => yes(r.is_active) }] },
-  advent: { title: 'Advent calendar', endpoint: 'advent', pk: 'id', description: 'payload by kind — coupon: {type,value,min_subtotal,valid_days} · points: {points} · product: {product_slug} · gift: {text, coupon:{…}} · minigame: {game} · story: {story} · challenge: {text}',
-    fields: [{ name: 'year', label: 'Year', type: 'number', default: new Date().getFullYear() }, { name: 'day', label: 'Day (1–24)', type: 'number', default: 1 }, { name: 'title', label: 'Title' }, { name: 'teaser', label: 'Teaser (shown before opening)', nullable: true }, { name: 'kind', label: 'Kind', type: 'select', options: ['coupon', 'points', 'product', 'gift', 'minigame', 'challenge', 'story'], default: 'story' }, { name: 'art', label: 'Art', default: 'star' }, { name: 'payload', label: 'Payload (JSON)', type: 'json' }],
-    columns: [{ key: 'year', label: 'Year' }, { key: 'day', label: 'Day' }, { key: 'title', label: 'Title' }, { key: 'kind', label: 'Kind' }, { key: 'payload', label: 'Payload', render: (r) => <code>{JSON.stringify(r.payload).slice(0, 60)}</code> }] },
   challenges: { title: 'Daily challenges', endpoint: 'challenges', description: 'Kinds are verified on the server. target: play_game {game} · wishlist_count {count} · quiz_score {min} · find_hidden {count}',
     fields: [{ name: 'date', label: 'Date', type: 'date' }, { name: 'title', label: 'Title' }, { name: 'description', label: 'Description', type: 'textarea' }, { name: 'kind', label: 'Kind', type: 'select', options: ['open_advent', 'play_game', 'wishlist_count', 'quiz_score', 'find_hidden', 'visit_academy'], default: 'open_advent' }, { name: 'target', label: 'Target (JSON)', type: 'json', rows: 2 }, { name: 'reward_points', label: 'Reward Stardust', type: 'number', default: 10 }, { name: 'reward_coupon', label: 'Reward coupon (JSON, optional)', type: 'json', nullable: true, rows: 3, default: '' }, { name: 'is_active', label: 'Active', type: 'bool' }],
     columns: [{ key: 'date', label: 'Date', render: (r) => date(r.date) }, { key: 'title', label: 'Title' }, { key: 'kind', label: 'Kind' }, { key: 'reward_points', label: 'Stardust' }, { key: 'is_active', label: 'Active', render: (r) => yes(r.is_active) }] },
@@ -534,9 +532,9 @@ const NAV = [
   ['Catalog', [['products', 'Products'], ['categories', 'Categories'], ['reviews', 'Reviews']]],
   ['Promotions', [['coupons', 'Discount codes'], ['campaigns', 'Campaigns'], ['banners', 'Banners']]],
   ['Pioneer Card', [['pioneer-links', 'Card connections'], ['pioneer-offers', 'Member offers']]],
-  ['Website', [['wishes', 'Christmas Wishes'], ['content', 'Homepage texts'], ['events', 'Events'], ['newsletter', 'Newsletter']]],
+  ['Website', [['calendar', 'Christmas Calendar'], ['wishes', 'Christmas Wishes'], ['content', 'Homepage texts'], ['events', 'Events'], ['newsletter', 'Newsletter']]],
   ['Store settings', [['shipping-zones', 'Delivery']]],
-  ['Christmas fun', [['advent', 'Advent calendar'], ['challenges', 'Daily challenges'], ['games', 'Mini-games'], ['reward-rules', 'Reward rules'], ['quiz', 'Quiz'], ['wheel', 'Wheel'], ['mystery', 'Mystery box'], ['hidden-objects', 'Hidden wonders']], { collapsible: true }],
+  ['Christmas fun', [['challenges', 'Daily challenges'], ['games', 'Mini-games'], ['reward-rules', 'Reward rules'], ['quiz', 'Quiz'], ['wheel', 'Wheel'], ['mystery', 'Mystery box'], ['hidden-objects', 'Hidden wonders']], { collapsible: true }],
 ];
 
 function CrudRoute() {
@@ -586,6 +584,8 @@ export default function AdminApp() {
           <Route path="customers/:id" element={<CustomerDetail />} />
           <Route path="pioneer-links" element={<PioneerLinks />} />
           <Route path="wishes" element={<Wishes />} />
+          <Route path="calendar" element={<AdminCalendar />} />
+          <Route path="advent" element={<Navigate to="/admin/calendar" replace />} />
           <Route path=":entity" element={<CrudRoute />} />
         </Routes>
       </main>

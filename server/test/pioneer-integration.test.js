@@ -110,7 +110,8 @@ test('dashboard shows Magical card, balance, transactions and reward eligibility
   const me = await a('GET', '/auth/me');
   assert.equal(me.data.user.pioneer.cardMasked, '•••• 1623');
   const product = await a('GET', '/products/glass-pomegranate');
-  assert.equal((await a('POST', '/cart/items', { variantId: product.data.product.variants[0].id, quantity: 1 })).status, 201);
+  const inStock = product.data.product.variants.find((v) => v.stock > 1) ?? product.data.product.variants[0]; // other tests use up stock
+  assert.equal((await a('POST', '/cart/items', { variantId: inStock.id, quantity: 1 })).status, 201);
   const cart = await a('GET', '/cart');
   assert.equal(cart.data.hasPioneer, true, 'member discount applies');
   assert.ok(cart.data.pioneerDiscount > 0);

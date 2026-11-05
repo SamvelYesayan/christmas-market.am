@@ -8,6 +8,7 @@ import { personalRecommendations } from '../services/recommend.js';
 import { productCard } from '../services/catalog.js';
 import { publicGrant, stardustBalance } from '../services/rewards.js';
 import { adventToday, dateParts } from '../lib/time.js';
+import { TOTAL_DAYS, VALID_CLAIM_SQL } from '../services/calendar.js';
 import { loc } from '../i18n/index.js';
 import { pioneer } from '../integrations/pioneer/index.js';
 
@@ -113,7 +114,7 @@ r.get('/dashboard', ah(async (req, res) => {
             ORDER BY ends_at NULLS LAST`, [uid]),
     many(`SELECT a.key, ua.earned_at FROM user_achievements ua JOIN achievements a ON a.key=ua.achievement_key WHERE ua.user_id=$1`, [uid]),
     many('SELECT key, title, description, icon, i18n FROM achievements ORDER BY key').then((r) => r.map((x) => loc(x))),
-    one(`SELECT count(*)::int AS opened FROM advent_openings ao JOIN advent_doors d ON d.id=ao.door_id WHERE ao.user_id=$1 AND d.year=$2`, [uid, year]),
+    one(`SELECT count(*)::int AS opened FROM advent_openings ao JOIN advent_doors d ON d.id=ao.door_id WHERE ao.user_id=$1 AND d.year=$2 AND ${VALID_CLAIM_SQL}`, [uid, year]),
     stardustBalance(pool, uid),
   ]);
   res.json({
@@ -122,7 +123,7 @@ r.get('/dashboard', ah(async (req, res) => {
     rewards: grants.map(publicGrant),
     coupons: coupons.map((x) => loc(x)).map((c) => ({ code: c.code, description: c.description, type: c.type, value: c.value, minSubtotal: c.min_subtotal, endsAt: c.ends_at, pioneerOnly: c.pioneer_only })),
     achievements: allAchievements.map((a) => ({ ...a, i18n: undefined, earnedAt: achievements.find((x) => x.key === a.key)?.earned_at ?? null })),
-    advent: { opened: advent.opened, total: 24 },
+    advent: { opened: advent.opened, total: TOTAL_DAYS },
     stardust,
   });
 }));

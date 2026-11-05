@@ -8,6 +8,7 @@ import customers from './customers.js';
 import analytics from './analytics.js';
 import pioneerLinks from './pioneer.js';
 import wishes from './wishes.js';
+import calendar from './calendar.js';
 
 const r = Router();
 r.use(requireRole('admin'));
@@ -53,10 +54,8 @@ r.use('/events', crudRouter('christmas_events', {
   schema: z.object({ title: z.string().min(1).max(200), description: z.string().max(2000).nullable().optional(), location: z.string().max(200).nullable().optional(), starts_at: ts, ends_at: ts.optional(), is_active: z.boolean() }),
 }));
 
-r.use('/advent', crudRouter('advent_doors', {
-  pkType: 'int', orderBy: 'year DESC, day', jsonCols: ['payload'],
-  schema: z.object({ year: z.number().int().min(2024).max(2100), day: z.number().int().min(1).max(24), title: z.string().min(1).max(120), teaser: z.string().max(200).nullable().optional(), kind: z.enum(['coupon', 'points', 'product', 'gift', 'minigame', 'challenge', 'story']), payload: z.record(z.any()), art: z.string().max(30) }),
-}));
+// The Christmas Calendar has its own admin API (31 days, claims are read-only): routes/admin/calendar.js
+r.use('/calendar', calendar);
 
 r.use('/challenges', crudRouter('challenges', {
   pkType: 'int', orderBy: 'date DESC', jsonCols: ['target', 'reward_coupon'],
