@@ -36,11 +36,17 @@ const schema = z.object({
   PIONEER_MODE: z.enum(['auto', 'magical', 'disabled']).default('auto'),
   MAGICAL_PIONEER_API_URL: unsetIfEmpty(z.string().url().optional()),
   MAGICAL_PIONEER_API_KEY: unsetIfEmpty(z.string().min(20).optional()),
+  // Same settings under the names used in the integration brief (used only when the names above are unset).
+  MAGICAL_API_BASE_URL: unsetIfEmpty(z.string().url().optional()),
+  MAGICAL_API_KEY: unsetIfEmpty(z.string().min(20).optional()),
+  // Pioneer points kill switch. 'off' blocks every credit/debit. Outside production points only ever go to a local
+  // Magical (localhost) — see integrations/pioneer/pointsGuard.js; there is no setting that lifts that.
+  MAGICAL_POINTS: z.enum(['auto', 'off']).default('auto'),
   MAGICAL_PIONEER_TIMEOUT_MS: z.coerce.number().int().min(500).max(60_000).default(10_000),
   PIONEER_DISCOUNT_PERCENT: z.coerce.number().min(0).max(50).default(5),
 
   // Advent calendar: override "today" for development/QA only (YYYY-MM-DD). Ignored in production.
-  ADVENT_DATE_OVERRIDE: z.string().optional(),
+  ADVENT_DATE_OVERRIDE: z.literal('').transform(() => undefined).or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'ADVENT_DATE_OVERRIDE must be YYYY-MM-DD')).optional(),
   STORE_TIMEZONE: z.string().default('Asia/Yerevan'),
 });
 
@@ -51,6 +57,10 @@ if (!parsed.success) {
 }
 
 export const config = parsed.data;
+// One URL/key pair, whichever names were used. The key is never logged or sent anywhere except Magical.
+config.MAGICAL_PIONEER_API_URL ??= config.MAGICAL_API_BASE_URL;
+config.MAGICAL_PIONEER_API_KEY ??= config.MAGICAL_API_KEY;
+delete config.MAGICAL_API_KEY;
 export const isProd = config.NODE_ENV === 'production';
 
 // Card numbers and CVVs are sent to Magical, so production must use https.

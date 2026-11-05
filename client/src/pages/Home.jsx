@@ -121,14 +121,10 @@ function PopularGifts({ products, limited }) {
 function MoreMagic() {
   const { user, pioneerStatus } = useApp();
   const { t } = useI18n();
-  const now = new Date();
-  const christmas = new Date(now.getFullYear(), 11, 25);
-  if (christmas < now) christmas.setFullYear(now.getFullYear() + 1);
-  const days = Math.ceil((christmas - now) / 86400000);
   const tiles = [
     { to: '/gift-finder', art: { type: 'giftbox', c1: '#f2c46d', c2: '#c8102e' }, title: t('nav.finder'), body: t('home.moreFinder') },
     { to: '/pioneer', art: { type: 'card', c1: '#f2c46d', c2: '#3a2a0e' }, title: t('nav.pioneer'), body: user?.pioneer ? t('home.morePioneerOn', { card: user.pioneer.cardMasked }) : t('home.morePioneer', { p: pioneerStatus?.discountPercent ?? 5 }) },
-    { to: '/advent', art: { type: 'door', c1: '#0f6b4f', c2: '#f2c46d' }, title: t('nav.advent'), body: t('home.moreAdvent', { n: days }) },
+    { to: '/advent', art: { type: 'door', c1: '#0f6b4f', c2: '#f2c46d' }, title: t('nav.advent'), body: t('home.moreAdvent') },
     { to: '/games', art: { type: 'star', c1: '#2a4fa8', c2: '#f2c46d' }, title: t('home.moreFunTitle'), body: t('home.moreFun') },
   ];
   return (

@@ -1,8 +1,28 @@
 // End-to-end API tests against a running server with demo data (npm run seed:demo).
 //   API_URL=http://localhost:4000 npm test
-// Requires PAYMENTS_TEST_MODE=true and ADVENT_DATE_OVERRIDE in December.
-import { test } from 'node:test';
+// Requires PAYMENTS_TEST_MODE=true.
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import pg from 'pg';
+
+// The cart, checkout and coupon tests buy from their own test product (50 in stock, same price as the glass
+// pomegranate), so repeated runs never use up the shop's real stock. It is removed afterwards; test orders keep
+// their rows with the product reference cleared.
+const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
+const TEST_SLUG = `api-test-ornament-${Date.now().toString(36)}`;
+let testProductId;
+before(async () => {
+  const { rows: [p] } = await db.query(
+    `INSERT INTO products (slug, name, description, price, category_id)
+     VALUES ($1, $2, 'Created by the API tests and removed afterwards.', 6500, (SELECT id FROM categories WHERE slug = 'ornaments'))
+     RETURNING id`, [TEST_SLUG, `API test ornament ${TEST_SLUG.slice(-6)}`]);
+  testProductId = p.id;
+  await db.query(`INSERT INTO product_variants (product_id, sku, name, stock) VALUES ($1, $2, 'Standard', 50)`, [p.id, TEST_SLUG.toUpperCase().slice(0, 40)]);
+});
+after(async () => {
+  if (testProductId) await db.query('DELETE FROM products WHERE id=$1', [testProductId]);
+  await db.end();
+});
 
 const BASE = `${process.env.API_URL ?? 'http://localhost:4000'}/api/v1`;
 const ORIGIN = (process.env.APP_ORIGIN ?? 'http://localhost:5173').split(',')[0];
@@ -49,8 +69,10 @@ test('catalog lists products and details', async () => {
   const detail = await guest('GET', `/products/glass-pomegranate`);
   assert.equal(detail.status, 200);
   assert.ok(detail.data.product.variants.length >= 1);
-  // Earlier checkout runs use up stock, so take a variant that still has some.
-  variantId = (detail.data.product.variants.find((v) => v.stock > 1) ?? detail.data.product.variants[0]).id;
+  // Purchases below use the test product created in before() — never the shop's real stock.
+  const own = await guest('GET', `/products/${TEST_SLUG}`);
+  assert.equal(own.status, 200, 'test product is listed like any other');
+  variantId = own.data.product.variants[0].id;
 });
 
 test('registers a user with personalization', async () => {
@@ -80,7 +102,7 @@ test('cart: add, coupon validation, quote', async () => {
 });
 
 test('checkout with cash on delivery creates a confirmed order and reserves stock', async () => {
-  const before = (await guest('GET', '/products/glass-pomegranate')).data.product.variants.find((v) => v.id === variantId).stock;
+  const before = (await guest('GET', `/products/${TEST_SLUG}`)).data.product.variants.find((v) => v.id === variantId).stock;
   const r = await user('POST', '/orders', {
     customer: { name: 'Test Elf', email, phone: '+374 91 000000' },
     delivery: { zone: 'yerevan', city: 'Yerevan', address: '1 Snow Street' },
@@ -90,7 +112,7 @@ test('checkout with cash on delivery creates a confirmed order and reserves stoc
   assert.equal(r.data.order.status, 'confirmed');
   assert.equal(r.data.order.paymentStatus, 'cod');
   assert.equal(r.data.order.subtotal, 13000);
-  const after = (await guest('GET', '/products/glass-pomegranate')).data.product.variants.find((v) => v.id === variantId).stock;
+  const after = (await guest('GET', `/products/${TEST_SLUG}`)).data.product.variants.find((v) => v.id === variantId).stock;
   assert.equal(after, before - 2);
   const cart = await user('GET', '/cart');
   assert.equal(cart.data.count, 0);
@@ -120,9 +142,13 @@ test('christmas calendar: 31 days, only today can be claimed (full scenarios in 
   assert.equal(cal.status, 200);
   assert.equal(cal.data.days.length, 31);
   const today = cal.data.todayDay;
-  assert.ok(today >= 2, 'set ADVENT_DATE_OVERRIDE to a December date for this test');
-  assert.equal(cal.data.days[today].status, today < 31 ? 'locked' : undefined);
-  assert.equal((await user('POST', '/advent/claim', { day: today - 1 })).status, 403, 'yesterday cannot be claimed late');
+  if (today >= 2) {
+    if (today < 31) assert.equal(cal.data.days[today].status, 'locked');
+    assert.equal((await user('POST', '/advent/claim', { day: today - 1 })).status, 403, 'yesterday cannot be claimed late');
+  } else if (!today) {
+    assert.equal(cal.data.phase, 'before');
+    assert.equal((await user('POST', '/advent/claim', { day: 8 })).data.error.code, 'calendar_not_started');
+  }
   assert.equal((await user('POST', '/advent/2/open')).status, 404, 'the old catch-up endpoint is gone');
 });
 

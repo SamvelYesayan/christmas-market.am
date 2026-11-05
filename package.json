@@ -12,7 +12,8 @@
     "db:seed": "npm run seed -w server",
     "db:seed:demo": "npm run seed:demo -w server",
     "admin:create": "npm run admin:create -w server",
-    "test": "npm test -w server"
+    "test": "npm test -w server",
+    "magical:mock": "npm run magical:mock -w server"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

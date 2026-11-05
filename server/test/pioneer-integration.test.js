@@ -58,7 +58,24 @@ before(async () => {
 after(async () => {
   child?.kill();
   await mock.stop();
+  if (cartProduct) {
+    const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+    await db.query('DELETE FROM products WHERE id=$1', [cartProduct.id]);
+    await db.end();
+  }
 });
+
+// A test-only product for the member-discount cart check, so the shop's real stock is never used.
+let cartProduct;
+async function testProductVariant() {
+  const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const slug = `pioneer-test-ornament-${Date.now().toString(36)}`;
+  const { rows: [p] } = await db.query(`INSERT INTO products (slug, name, price) VALUES ($1, $2, 6500) RETURNING id`, [slug, `Pioneer test ornament ${slug.slice(-6)}`]);
+  const { rows: [v] } = await db.query(`INSERT INTO product_variants (product_id, sku, name, stock) VALUES ($1, $2, 'Standard', 10) RETURNING id`, [p.id, slug.toUpperCase().slice(0, 40)]);
+  await db.end();
+  cartProduct = { id: p.id, slug };
+  return v.id;
+}
 
 test('startup validates the API key with GET /me (key not printed)', () => {
   assert.match(logs, /Magical Pioneer API key OK \(client "christmas-store"/);
@@ -109,12 +126,23 @@ test('dashboard shows Magical card, balance, transactions and reward eligibility
   assert.equal(catalog.data.items.length, 2);
   const me = await a('GET', '/auth/me');
   assert.equal(me.data.user.pioneer.cardMasked, '•••• 1623');
-  const product = await a('GET', '/products/glass-pomegranate');
-  const inStock = product.data.product.variants.find((v) => v.stock > 1) ?? product.data.product.variants[0]; // other tests use up stock
-  assert.equal((await a('POST', '/cart/items', { variantId: inStock.id, quantity: 1 })).status, 201);
+  assert.equal((await a('POST', '/cart/items', { variantId: await testProductVariant(), quantity: 1 })).status, 201);
   const cart = await a('GET', '/cart');
   assert.equal(cart.data.hasPioneer, true, 'member discount applies');
   assert.ok(cart.data.pioneerDiscount > 0);
+});
+
+test('without points:credit granted, a game reward is queued but nothing is sent to Magical', async () => {
+  const sentBefore = mock.state.requests.filter((r) => r.url.includes('/points/')).length;
+  const found = await a('POST', '/hidden/sugar-quill/find');
+  assert.equal(found.status, 200, JSON.stringify(found.data));
+  await new Promise((r) => setTimeout(r, 600));
+  assert.equal(mock.state.requests.filter((r) => r.url.includes('/points/')).length, sentBefore, 'no refused calls to Magical');
+  const db = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const { rows: [op] } = await db.query('SELECT status, attempts FROM pioneer_point_operations WHERE grant_id=$1', [found.data.reward.id]);
+  assert.deepEqual(op, { status: 'pending', attempts: 0 }, 'queued, waiting for the scope');
+  await db.query('DELETE FROM pioneer_point_operations WHERE grant_id=$1', [found.data.reward.id]);
+  await db.end();
 });
 
 test('one card per account and one account per card; inactive card; lockouts', async () => {
@@ -145,14 +173,15 @@ test('one card per account and one account per card; inactive card; lockouts', a
   }
 });
 
-test('Magical outage or timeout: friendly error, last known balance marked not live', async () => {
+test('Magical outage or timeout: friendly error, no balance shown as current (last confirmed one is labelled)', async () => {
   mock.state.down = true;
   try {
     const s = await (async () => { await new Promise((r) => setTimeout(r, 5200)); return a('GET', '/pioneer/summary'); })(); // let the 5 s cache expire
     assert.equal(s.status, 200);
     assert.equal(s.data.live, false);
-    assert.equal(s.data.balance.points, 220);
-    assert.equal(s.data.balance.live, false);
+    assert.equal(s.data.balance, null, 'an old balance is never presented as the current one');
+    assert.equal(s.data.lastConfirmed.points, 220);
+    assert.ok(s.data.lastConfirmed.asOf);
     assert.ok(!/server_error|stack/i.test(JSON.stringify(s.data)));
   } finally {
     mock.state.down = false;

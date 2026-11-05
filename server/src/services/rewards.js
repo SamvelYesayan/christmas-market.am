@@ -1,10 +1,12 @@
 // Server-side reward engine. Every reward is a row in reward_grants with a unique (user, source, source_ref),
 // which makes all reward endpoints idempotent and stops replay/duplicate claims.
-import { one, many, query } from '../db.js';
+// Points (Stardust) earned while a Magical Pioneer Card is linked are credited to that card through Magical
+// (services/pioneerPoints.js): one credit operation per reward, queued in the same transaction as the reward.
+import { many } from '../db.js';
 import { couponCode } from '../lib/crypto.js';
-import { logger } from '../lib/logger.js';
-import { pioneer } from '../integrations/pioneer/index.js';
+import { pioneer, pointsAllowed } from '../integrations/pioneer/index.js';
 import { currentLocale } from '../i18n/index.js';
+import { queueGameCredit, reconcilePointOperations, sendQueuedCredits } from './pioneerPoints.js';
 
 export async function getRule(db, key) {
   const { rows } = await db.query('SELECT config FROM reward_rules WHERE key = $1 AND is_active', [key]);
@@ -48,7 +50,8 @@ export async function grantReward(db, userId, reward) {
   const points = reward.kind === 'points' ? Math.max(0, Math.floor(reward.points ?? 0)) : 0;
   const link = points > 0 ? await activePioneerLink(db, userId) : null;
   const payload = { ...(reward.payload ?? {}), ...(reward.titleHy ? { i18n: { hy: { title: reward.titleHy } } } : {}) };
-  const syncStatus = points > 0 ? (link ? 'pending' : 'no_card') : 'not_applicable';
+  // Points blocked on this server → the reward is not sent to any card (shown as such), and nothing is queued.
+  const syncStatus = points > 0 ? (link ? (pointsAllowed ? 'pending' : 'not_applicable') : 'no_card') : 'not_applicable';
   const { rows } = await db.query(
     `INSERT INTO reward_grants (user_id, source, source_ref, kind, title, points, coupon_id, product_id, payload, pioneer_sync_status)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -61,6 +64,8 @@ export async function grantReward(db, userId, reward) {
     const again = await db.query('SELECT * FROM reward_grants WHERE user_id=$1 AND source=$2 AND source_ref=$3', [userId, reward.source, reward.sourceRef]);
     return { grant: again.rows[0], created: false };
   }
+  // A linked card gets the points through Magical; queued here so it is recorded atomically with the reward.
+  if (points > 0 && link) await queueGameCredit(db, userId, rows[0]);
   return { grant: { ...rows[0], coupon_code: code }, created: true };
 }
 
@@ -77,39 +82,17 @@ export const publicGrant = (g) => g && ({
 });
 
 /**
- * Push pending Stardust to the linked Pioneer card. Safe to call repeatedly (idempotent references).
- * Only runs when the Pioneer system offers a credit endpoint; the real Magical Pioneer Card API does not,
- * so Stardust then stays recorded in the store (status 'pending') and is never reported as transferred.
+ * Send this customer's queued Pioneer credits to Magical (call after granting a reward). Safe to call repeatedly:
+ * every credit has its own stable reference and idempotency key. Rewards earned without a linked card stay as
+ * store Stardust ('no_card') and are not sent later.
  */
-export async function syncPioneerPoints(userId) {
-  if (!pioneer.configured || !pioneer.supportsCredit) return;
-  const link = await one(`SELECT * FROM pioneer_links WHERE user_id=$1 AND status='active' AND provider=$2`, [userId, pioneer.provider]);
-  if (!link) return;
-  const pending = await many(
-    `SELECT * FROM reward_grants WHERE user_id=$1 AND points > 0 AND pioneer_sync_status IN ('pending','failed','no_card') ORDER BY created_at LIMIT 100`,
-    [userId],
-  );
-  for (const g of pending) {
-    try {
-      await pioneer.creditPoints(link.external_card_id, g.points, `grant-${g.id}`, `Christmas Market: ${g.title}`);
-      await query(`UPDATE reward_grants SET pioneer_sync_status='synced', pioneer_error=NULL WHERE id=$1`, [g.id]);
-    } catch (err) {
-      logger.warn({ err: err.message, grant: g.id }, 'pioneer credit failed');
-      await query(`UPDATE reward_grants SET pioneer_sync_status='failed', pioneer_error=$2 WHERE id=$1`, [g.id, err.message.slice(0, 300)]);
-      if (err.code === 'not_configured' || err.code === 'upstream_error') break;
-    }
-  }
-  await query('UPDATE pioneer_links SET last_synced_at = now() WHERE id = $1', [link.id]);
+export function syncPioneerPoints(userId) {
+  return sendQueuedCredits(userId);
 }
 
-/** Retries failed/pending syncs for everyone; run periodically from index.js. */
-export async function syncAllPending() {
-  if (!pioneer.configured || !pioneer.supportsCredit) return;
-  const users = await many(
-    `SELECT DISTINCT g.user_id FROM reward_grants g JOIN pioneer_links l ON l.user_id = g.user_id AND l.status='active'
-      WHERE g.points > 0 AND g.pioneer_sync_status IN ('pending','failed','no_card') LIMIT 200`,
-  );
-  for (const u of users) await syncPioneerPoints(u.user_id);
+/** Periodic job (index.js): resends due credits/debits and settles unknown outcomes with their original keys. */
+export function syncAllPending() {
+  return reconcilePointOperations();
 }
 
 export async function awardAchievement(db, userId, key) {

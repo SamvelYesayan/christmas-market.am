@@ -80,7 +80,7 @@ Admin panel: http://localhost:5173/admin
   Test orders are flagged `is_test`, show a TEST banner and are excluded from revenue analytics.
 - `MAGICAL_PIONEER_API_URL` + `MAGICAL_PIONEER_API_KEY` → connect to the official Magical Pioneer Card Integration API
   (local Magical: `http://127.0.0.1:3000/api/integration/v1`; see the Pioneer integration README).
-- `ADVENT_DATE_OVERRIDE=2026-12-08` → pretend it is that date so December doors can be opened (ignored in production).
+- `ADVENT_DATE_OVERRIDE=2026-12-08` → development/QA only: pretend it is that date (ignored in production, logged as a warning). Leave it unset to use the real Asia/Yerevan date.
 
 ---
 

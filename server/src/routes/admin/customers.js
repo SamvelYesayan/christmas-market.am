@@ -8,6 +8,7 @@ import { audit } from './audit.js';
 import { pioneer, MagicalApiError } from '../../integrations/pioneer/index.js';
 import { mapMagicalError } from '../pioneer.js';
 import { logLinkEvent } from '../../services/pioneer.js';
+import { hasOpenDebit, openDebitError } from '../../services/pioneerPoints.js';
 
 const r = Router();
 
@@ -56,6 +57,7 @@ r.patch('/:id', validate({ params: z.object({ id: z.string().uuid() }), body: z.
 // Disconnects a customer's card (e.g. reported lost or connected to the wrong account). It never touches points:
 // balances live in the Pioneer system. The customer can connect again only with a fresh card + code verification.
 r.post('/:id/pioneer/unlink', validate({ params: z.object({ id: z.string().uuid() }), body: z.object({ reason: z.string().trim().min(3).max(300) }) }), ah(async (req, res) => {
+  if (await hasOpenDebit(req.params.id)) throw openDebitError();
   // Magical owns the link: unlink there first (an already-missing link is fine), then update the local mirror.
   try {
     await pioneer.unlink(req.params.id);

@@ -196,7 +196,45 @@ function Transactions({ first }) {
   );
 }
 
-function Dashboard({ s, reload }) {
+/** What the store did with Pioneer points: game rewards sent to the card and gifts redeemed with points. */
+function StoreActivity({ items, earnOn }) {
+  const { t, dateShort } = useI18n();
+  const credits = items.filter((x) => x.kind === 'credit');
+  const debits = items.filter((x) => x.kind === 'debit');
+  const state = (x) => {
+    if (x.status === 'done') return { cls: 'ok', text: t(x.kind === 'credit' ? 'pc.st_done_credit' : 'pc.st_done_debit') };
+    if (x.status === 'waiting') return { cls: 'muted', text: t('pc.st_waiting') };
+    const why = x.errorCode && t(`pc.err_${x.errorCode}`) !== `pc.err_${x.errorCode}` ? ` · ${t(`pc.err_${x.errorCode}`)}` : '';
+    return { cls: 'minus', text: t(x.kind === 'credit' ? 'pc.st_failed_credit' : 'pc.st_failed_debit') + why };
+  };
+  const row = (x) => {
+    const st = state(x);
+    return (
+      <li key={x.id}>
+        <span>{dateShort(x.createdAt)}</span>
+        <span>{x.title}
+          <small className={st.cls}> · {st.text}</small>
+          {x.status === 'done' && x.couponCode && <small> · {t('pc.yourCode')}: <b className="gold" dir="ltr">{x.couponCode}</b></small>}
+          {x.status === 'done' && x.fulfilment === 'awaiting_handover' && <small className="muted"> · {t('pc.collect')}</small>}
+          {x.fulfilment === 'handed_over' && <small className="muted"> · {t('pc.handedOver')}</small>}
+        </span>
+        <b className={x.kind === 'credit' ? 'plus' : 'minus'}>{x.kind === 'credit' ? '+' : '−'}{pts(x.points)}</b>
+      </li>
+    );
+  };
+  return (
+    <section className="pc-section">
+      <h3>{t('pc.storeActivity')}</h3>
+      <p className="muted small">{earnOn ? t('pc.earnOn') : t('pc.earnOff')}</p>
+      <h4>{t('pc.gameRewards')}</h4>
+      {credits.length ? <ul className="ledger">{credits.map(row)}</ul> : <p className="muted">{t('pc.noGameRewards')}</p>}
+      <h4>{t('pc.giftRedemptions')}</h4>
+      {debits.length ? <ul className="ledger">{debits.map(row)}</ul> : <p className="muted">{t('pc.noRedemptions')}</p>}
+    </section>
+  );
+}
+
+function Dashboard({ s, reload, refresh, refreshing }) {
   const { t, dateShort } = useI18n();
   const { toast, refreshUser, refreshCart } = useApp();
   const [dc, setDc] = useState(false);
@@ -208,8 +246,10 @@ function Dashboard({ s, reload }) {
         <div className="panel pad pc-balance">
           <span className="eyebrow">{t('pc.points')}</span>
           <p className="balance-num">{balance != null ? pts(balance) : '—'}</p>
-          {s.balance && <small className="muted">{s.balance.live ? `✦ ${t('pc.live')}` : t('pc.asOf', { date: dateShort(s.balance.asOf) })}</small>}
-          {s.error && <p className="form-error">{s.error}</p>}
+          {s.balance?.live && <small className="muted">✦ {t('pc.live')}</small>}
+          {!s.live && <p className="form-error" role="status">{t('pc.unavailableNow')}</p>}
+          {!s.live && s.lastConfirmed && <small className="muted">{t('pc.lastConfirmed', { n: pts(s.lastConfirmed.points), date: dateShort(s.lastConfirmed.asOf) })}</small>}
+          <button className="btn btn-ghost btn-sm pc-refresh" onClick={refresh} disabled={refreshing}>{refreshing ? t('pc.refreshing') : `↻ ${t('pc.refresh')}`}</button>
           {s.card.status === 'inactive' && <p className="form-error">{t('pc.cardInactive')}</p>}
           <dl className="pc-facts">
             <div><dt>{t('pc.holder')}</dt><dd>{s.card.holderName ?? t('pc.member')}</dd></div>
@@ -248,6 +288,8 @@ function Dashboard({ s, reload }) {
         </section>
       )}
 
+      {Array.isArray(s.activity) && <StoreActivity items={s.activity} earnOn={s.pointsEarnable} />}
+
       {s.live && (
         <section className="pc-section">
           <h3>{t('pc.history')}</h3>
@@ -269,13 +311,16 @@ export default function MyPioneerCard() {
   const { t } = useI18n();
   const [n, setN] = useState(0);
   const [open, setOpen] = useState(false);
-  const [state] = useAsync(() => (user ? api.get('/pioneer/summary') : Promise.resolve(null)), [user?.id, n]);
+  const [fresh, setFresh] = useState(false);
+  // 'Refresh balance' asks the server to read Magical again (no cache); the server never trusts a browser value.
+  const [state] = useAsync(() => (user ? api.get(`/pioneer/summary${fresh ? '?fresh=1' : ''}`).finally(() => setFresh(false)) : Promise.resolve(null)), [user?.id, n]);
   const reload = () => setN((x) => x + 1);
+  const refresh = () => { setFresh(true); reload(); };
   if (!user) return <div className="panel pad center"><p>{t('pc.signIn')}</p><Link className="btn" to="/login?next=/account/pioneer">{t('common.signIn')}</Link></div>;
   if (state.loading && !state.data) return <Loader />;
   if (state.error) return <p className="form-error">{state.error.message}</p>;
   const s = state.data;
-  if (s.linked) return <Dashboard s={s} reload={reload} />;
+  if (s.linked) return <Dashboard s={s} reload={reload} refresh={refresh} refreshing={state.loading} />;
   const remoteNotice = s.unlinkedRemotely ? <p className="form-error">{t('pc.unlinkedRemotely')}</p> : null;
   const discount = s.discountPercent ?? pioneerStatus?.discountPercent ?? 5;
   return (

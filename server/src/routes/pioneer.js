@@ -3,7 +3,8 @@
 //   • the customer id sent to Magical is always the signed-in user's id from the session;
 //   • card number + CVV go straight to Magical once and are never stored, cached or logged;
 //   • Magical is the source of truth for links, balances, transactions and rewards;
-//   • v1 cannot spend, earn or redeem points, so the store does none of that.
+//   • points change only through Magical (POST /points/credit|debit, services/pioneerPoints.js): game rewards are
+//     credited, store gifts are redeemed by a debit that Magical must confirm first. The store keeps no balance.
 import { Router } from 'express';
 import { z } from 'zod';
 import { many, query, withTransaction } from '../db.js';
@@ -11,8 +12,9 @@ import { ah, badRequest, conflict, HttpError, notFound, unavailable } from '../l
 import { logger } from '../lib/logger.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { pioneerLimiter } from '../middleware/security.js';
-import { pioneer, MagicalApiError } from '../integrations/pioneer/index.js';
+import { pioneerLimiter, redeemLimiter } from '../middleware/security.js';
+import { hasScope, pioneer, MagicalApiError } from '../integrations/pioneer/index.js';
+import { hasOpenDebit, openDebitError, redeemOffer } from '../services/pioneerPoints.js';
 import { awardAchievement } from '../services/rewards.js';
 import { activeLink, cached, forgetCustomer, holderOf, logLinkEvent, markUnlinked, saveActiveLink } from '../services/pioneer.js';
 import { PRODUCT_CARD_SQL, productCard } from '../services/catalog.js';
@@ -24,7 +26,8 @@ const r = Router();
 const status = () => ({
   available: pioneer.configured,
   discountPercent: config.PIONEER_DISCOUNT_PERCENT,
-  pointsRedeemable: false, // Magical API v1 has no points spending/earning
+  pointsEarnable: hasScope('points:credit'), // game rewards are credited to the card through Magical
+  pointsRedeemable: hasScope('points:debit'), // store gifts can be redeemed with Pioneer points
 });
 
 /** Magical error → safe customer-facing error. Never exposes upstream messages, stack traces or credentials. */
@@ -77,6 +80,7 @@ r.get('/offers', ah(async (_req, res) => {
     offers: offers.map((x) => loc(x)).map((o) => ({
       id: o.id, title: o.title, description: o.description, kind: o.kind, pointsCost: o.points_cost,
       discountPercent: o.discount_percent, product: o.product ? productCard(o.product) : null, stock: o.stock,
+      redeemable: ['redeem_gift', 'discount'].includes(o.kind) && o.points_cost > 0,
     })),
   });
 }));
@@ -132,6 +136,7 @@ r.post('/link', requireAuth, pioneerLimiter, validate({ body: linkSchema }), ah(
 
 const unlinkSchema = z.object({ confirm: z.literal(true) }).strict();
 r.delete('/link', requireAuth, validate({ body: unlinkSchema }), ah(async (req, res) => {
+  if (await hasOpenDebit(req.user.id)) throw openDebitError();
   const link = await activeLink(req.user.id);
   try {
     await pioneer.unlink(req.user.id);
@@ -161,10 +166,34 @@ async function dropStaleLink(link, userId) {
 
 const pageQuery = z.object({ page: z.coerce.number().int().min(1).max(100000).default(1) });
 
-r.get('/summary', requireAuth, ah(async (req, res) => {
+/** The customer's recent Pioneer points activity in the store (game credits, gift debits) with their status. */
+async function storeActivity(userId, locale) {
+  const rows = await many(
+    `SELECT op.id, op.kind, op.source, op.points, op.status, op.last_error_code, op.created_at, op.completed_at,
+            COALESCE(g.payload->'i18n'->$2->>'title', g.title, o.i18n->$2->>'title', r.title) AS title,
+            r.fulfilment, c.code AS coupon_code
+       FROM pioneer_point_operations op
+       LEFT JOIN reward_grants g ON g.id = op.grant_id
+       LEFT JOIN pioneer_redemptions r ON r.id = op.redemption_id
+       LEFT JOIN pioneer_offers o ON o.id = r.offer_id
+       LEFT JOIN coupons c ON c.id = r.coupon_id
+      WHERE op.user_id = $1 ORDER BY op.created_at DESC LIMIT 30`, [userId, locale]);
+  return rows.map((x) => ({
+    id: x.id, kind: x.kind, source: x.source, points: x.points, title: x.title,
+    // pending/processing/needs_reconciliation are all 'waiting for Magical' to the customer
+    status: x.status === 'succeeded' ? 'done' : x.status === 'failed' ? 'failed' : 'waiting',
+    errorCode: x.status === 'failed' ? x.last_error_code : null,
+    fulfilment: x.fulfilment ?? null, couponCode: x.status === 'succeeded' ? x.coupon_code ?? null : null,
+    createdAt: x.created_at, completedAt: x.completed_at,
+  }));
+}
+
+r.get('/summary', requireAuth, validate({ query: z.object({ fresh: z.enum(['1']).optional() }) }), ah(async (req, res) => {
   const link = await activeLink(req.user.id);
   if (!link) return res.json({ ...status(), linked: false });
   const id = req.user.id;
+  if (req.query.fresh) forgetCustomer(id); // 'Refresh balance' reads Magical again
+  const activity = await storeActivity(id, req.locale);
   let card;
   try {
     card = (await cached(`card:${id}`, () => pioneer.card(id))).link;
@@ -173,12 +202,13 @@ r.get('/summary', requireAuth, ah(async (req, res) => {
       await dropStaleLink(link, id);
       return res.json({ ...status(), linked: false, unlinkedRemotely: true });
     }
-    // Magical unavailable: show what we last saw, clearly marked as not live.
+    // Magical unavailable: no current balance is shown. The last confirmed value is labelled as such, never as current.
     return res.json({
       ...status(), linked: true, live: false, error: mapMagicalError(err).message,
       card: { masked: link.card_masked, holderName: link.holder_name, memberSince: link.member_since, linkedAt: link.linked_at, status: null },
-      balance: link.last_balance != null ? { points: link.last_balance, live: false, asOf: link.balance_synced_at } : null,
-      transactions: null, rewards: [],
+      balance: null,
+      lastConfirmed: link.last_balance != null ? { points: link.last_balance, asOf: link.balance_synced_at } : null,
+      transactions: null, rewards: [], activity,
     });
   }
   const [tx, rw] = await Promise.allSettled([
@@ -195,6 +225,7 @@ r.get('/summary', requireAuth, ah(async (req, res) => {
     balance: { points: card.balance, live: true, asOf: new Date().toISOString() },
     transactions: tx.status === 'fulfilled' ? tx.value : null,
     rewards: rw.status === 'fulfilled' && Array.isArray(rw.value.items) ? rw.value.items : [],
+    activity,
     partialError: tx.status === 'rejected' || rw.status === 'rejected' ? 'The Pioneer Card service is temporarily unavailable. Please try again shortly.' : null,
   });
 }));
@@ -217,8 +248,13 @@ r.get('/rewards/:rewardId/eligibility', requireAuth, validate({ params: z.object
   }
 }));
 
-// Spending Pioneer points on store offers is not possible with Magical API v1.
-r.post('/offers/:id/redeem', requireAuth, (_req, _res, next) =>
-  next(new HttpError(501, 'Pioneer points cannot be spent in the store yet. Rewards are claimed through Magical.', 'not_supported')));
+// Redeem a store gift with Pioneer points. requestId is created once per confirmation in the browser, so repeated
+// clicks, refreshes and retries return the same redemption instead of debiting again. The cost, the balance check and
+// the debit are all decided here and by Magical — never by the browser.
+const redeemSchema = { params: z.object({ id: z.string().uuid() }), body: z.object({ requestId: z.string().uuid() }).strict() };
+r.post('/offers/:id/redeem', requireAuth, redeemLimiter, validate(redeemSchema), ah(async (req, res) => {
+  const out = await redeemOffer(req.user.id, req.params.id, req.body.requestId);
+  res.status(out.httpStatus).json({ redemption: out.redemption, repeated: !!out.repeated });
+}));
 
 export default r;

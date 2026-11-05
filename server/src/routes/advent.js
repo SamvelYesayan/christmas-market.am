@@ -9,6 +9,8 @@ import { validate } from '../middleware/validate.js';
 import { publicGrant, syncPioneerPoints } from '../services/rewards.js';
 import { PRODUCT_CARD_SQL, productCard } from '../services/catalog.js';
 import { loc } from '../i18n/index.js';
+import { config } from '../config.js';
+import { adventToday } from '../lib/time.js';
 import {
   GRAND_DAY, SOURCE, TOTAL_DAYS, VALID_CLAIM_SQL, calendarClock, claimDay, dayStatus, doorOptions, grandEligibility,
 } from '../services/calendar.js';
@@ -85,7 +87,8 @@ r.get('/', ah(async (req, res) => {
   const days = await Promise.all(Array.from({ length: TOTAL_DAYS }, (_, i) => publicDay(i + 1, state, clock, !!req.user)));
   const claimed = new Set(state.claims.keys());
   res.json({
-    year: clock.year, today: clock.today, todayDay: clock.phase === 'during' ? clock.day : null, phase: clock.phase,
+    year: clock.year, today: clock.today, todayDay: clock.phase === 'during' ? clock.day : null, phase: clock.phase, startsIn: clock.startsIn,
+    timezone: config.STORE_TIMEZONE,
     signedIn: !!req.user,
     progress: { completed: claimed.size, total: TOTAL_DAYS },
     grand: req.user ? grandEligibility(clock.day, claimed) : null,
@@ -97,9 +100,10 @@ r.get('/', ah(async (req, res) => {
 const claimSchema = z.object({ day: z.number().int().min(1).max(TOTAL_DAYS), optionKey: z.string().max(40).optional() }).strict();
 
 r.post('/claim', requireAuth, validate({ body: claimSchema }), ah(async (req, res) => {
-  const result = await claimDay(req.user.id, req.body);
+  const todayIso = adventToday(); // read the clock once so validation and the reply agree, even at midnight
+  const result = await claimDay(req.user.id, req.body, todayIso);
   if (result.grant?.points) syncPioneerPoints(req.user.id).catch(() => {});
-  const clock = calendarClock();
+  const clock = calendarClock(todayIso);
   const state = await loadState(req.user.id, clock);
   res.status(201).json({
     day: req.body.day,

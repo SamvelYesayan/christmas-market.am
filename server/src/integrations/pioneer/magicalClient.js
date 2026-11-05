@@ -2,7 +2,8 @@
 //   Base URL: MAGICAL_PIONEER_API_URL (e.g. https://magical.am/api/integration/v1)
 //   Auth:     Authorization: Bearer <MAGICAL_PIONEER_API_KEY>   (scopes: cards:verify, cards:link, cards:read, rewards:read)
 // Reference: magical-full/docs/PIONEER_CARD_API.md. Magical is the source of truth for links, balances,
-// transactions and rewards. v1 cannot credit, debit or redeem points, so this client cannot either.
+// transactions and rewards. Points are credited/debited only through POST /points/credit|debit (scopes
+// points:credit / points:debit, granted separately by a Magical administrator), always with an Idempotency-Key.
 //
 // Security: the API key is only ever placed in the Authorization header. It is never logged, returned or
 // included in error messages. Card numbers and CVVs are only sent in request bodies and never kept.
@@ -28,19 +29,23 @@ export class MagicalPioneerClient {
   mode = 'magical_api';
   provider = 'magical_api';
   configured = true;
-  supportsCredit = false; // not in Magical API v1
-  supportsRedeem = false; // not in Magical API v1
 
-  constructor({ baseUrl, apiKey, timeoutMs = 10_000, fetchImpl = globalThis.fetch } = {}) {
+  constructor({ baseUrl, apiKey, timeoutMs = 10_000, fetchImpl = globalThis.fetch, allowPoints = false } = {}) {
     if (!baseUrl || !apiKey) throw new Error('MagicalPioneerClient needs baseUrl and apiKey');
     this.base = baseUrl.replace(/\/+$/, '');
     this.timeoutMs = timeoutMs;
     this.fetch = fetchImpl;
+    // Points change real balances: off unless the caller explicitly allows them (see pointsGuard.js).
+    Object.defineProperty(this, 'allowPoints', { value: allowPoints === true, enumerable: true, writable: false });
     // Keep the key off the instance's enumerable fields so it can't leak through JSON/inspection.
     Object.defineProperty(this, 'authHeader', { value: `Bearer ${apiKey}`, enumerable: false });
   }
 
-  async #request(path, { method = 'GET', body } = {}) {
+  async #request(path, opts = {}) {
+    return (await this.#send(path, opts)).data;
+  }
+
+  async #send(path, { method = 'GET', body, headers: extra = {} } = {}) {
     let res;
     try {
       res = await this.fetch(this.base + path, {
@@ -49,6 +54,7 @@ export class MagicalPioneerClient {
           Authorization: this.authHeader,
           Accept: 'application/json',
           ...(body ? { 'Content-Type': 'application/json' } : {}),
+          ...extra,
         },
         body: body ? JSON.stringify(body) : undefined,
         redirect: 'error',
@@ -68,7 +74,7 @@ export class MagicalPioneerClient {
       });
     }
     if (data === null || typeof data !== 'object') throw new MagicalApiError('bad_response', { status: res.status });
-    return data;
+    return { data, status: res.status, replayed: res.headers.get('idempotent-replayed') === 'true' };
   }
 
   /** GET /me — validates the key. → { client: { name, scopes } } */
@@ -99,4 +105,18 @@ export class MagicalPioneerClient {
 
   /** GET /customers/{id}/rewards/{rewardId}/eligibility */
   eligibility(customerId, rewardId) { return this.#request(`/customers/${enc(customerId)}/rewards/${enc(rewardId)}/eligibility`); }
+
+  /**
+   * POST /points/credit | /points/debit. One attempt; the caller retries with the SAME idempotency key.
+   * body: { customerId, points, reference, reason, description? }
+   * → { transaction: { id, type, points, amount, balanceAfter, customerId, reference, reason, description, createdAt }, replayed }
+   */
+  async #points(kind, idempotencyKey, body) {
+    if (!this.allowPoints) throw new MagicalApiError('points_blocked'); // refused before any network request
+    const { data, replayed } = await this.#send(`/points/${kind}`, { method: 'POST', body, headers: { 'Idempotency-Key': idempotencyKey } });
+    if (!data.transaction || data.transaction.id == null) throw new MagicalApiError('bad_response');
+    return { transaction: data.transaction, replayed };
+  }
+  creditPoints(idempotencyKey, body) { return this.#points('credit', idempotencyKey, body); }
+  debitPoints(idempotencyKey, body) { return this.#points('debit', idempotencyKey, body); }
 }

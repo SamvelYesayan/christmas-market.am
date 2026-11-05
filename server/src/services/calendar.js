@@ -5,7 +5,7 @@
 // The database repeats the critical rules with triggers (migration 006), so they cannot be bypassed.
 import { withTransaction } from '../db.js';
 import { HttpError, badRequest, conflict } from '../lib/errors.js';
-import { adventToday, dateParts } from '../lib/time.js';
+import { adventToday, dateParts, daysBetween } from '../lib/time.js';
 import { awardAchievement, grantReward } from './rewards.js';
 
 export const TOTAL_DAYS = 31;
@@ -31,7 +31,9 @@ export function calendarClock(todayIso = adventToday(), year) {
   else if (y > current) day = 0;
   else day = t.month === 12 ? t.day : 0;
   const phase = day === 0 ? 'before' : day > TOTAL_DAYS ? 'over' : 'during';
-  return { year: y, day, phase, today: todayIso };
+  // Countdown to 1 December, computed on the server from the Yerevan date (never from the browser clock).
+  const startsIn = phase === 'before' ? daysBetween(todayIso, dayDate(y, 1)) : 0;
+  return { year: y, day, phase, today: todayIso, startsIn };
 }
 
 /** Status of one window for a customer: completed | available | missed | locked. */

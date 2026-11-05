@@ -1,7 +1,7 @@
 // Christmas Calendar — 31 Days of Gifts.
 //  • Rule tests run the real claim service against the database with a simulated server date in a far-future
 //    test year (2098), so every December day can be exercised. Test users and days are removed afterwards.
-//  • HTTP tests hit the running API (today = ADVENT_DATE_OVERRIDE) to prove the browser cannot pick the date.
+//  • HTTP tests hit the running API (today = the real Yerevan date) to prove the browser cannot pick the date.
 import { test, after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { pool } from '../src/db.js';
@@ -48,7 +48,7 @@ after(async () => {
 });
 
 test('rules: calendar clock, day status and eligibility are pure and predictable', () => {
-  assert.deepEqual(calendarClock('2098-11-30'), { year: 2098, day: 0, phase: 'before', today: '2098-11-30' });
+  assert.deepEqual(calendarClock('2098-11-30'), { year: 2098, day: 0, phase: 'before', today: '2098-11-30', startsIn: 1 });
   assert.equal(calendarClock('2098-12-31').day, 31);
   assert.equal(calendarClock('2099-01-02', 2098).phase, 'over');
   const claimed = new Set([1, 2, 3]);
@@ -183,7 +183,22 @@ test('8. date manipulation from the browser is ignored or rejected (HTTP)', asyn
   assert.equal(cal.data.days.length, 31);
   assert.equal(cal.data.days[30].isGrand, true);
   const today = cal.data.todayDay;
-  if (!today) return; // outside December without ADVENT_DATE_OVERRIDE: nothing more to check over HTTP
+  if (!today) {
+    // Outside December (e.g. 5 November): every window is locked and nothing can be claimed, whatever the browser says.
+    assert.equal(cal.data.phase, 'before');
+    assert.ok(cal.data.days.every((d) => d.status === 'locked'));
+    assert.ok(cal.data.days.slice(0, 30).every((d) => d.title === undefined), 'no gift is revealed early');
+    const early = client();
+    await early('POST', '/auth/register', { name: `Calendar ${TAG}`, email: `early-${TAG}@christmas-market.test`, password: 'snowy-password-123' });
+    const { rows: [e] } = await pool.query('SELECT id FROM users WHERE email=$1', [`early-${TAG}@christmas-market.test`]);
+    users.push(e.id);
+    for (const day of [1, 8, 31]) {
+      const r = await early('POST', '/advent/claim?date=2026-12-08', { day }, { Date: 'Tue, 08 Dec 2026 10:00:00 GMT', 'X-Advent-Date': '2026-12-08' });
+      assert.equal(r.status, 403);
+      assert.equal(r.data.error.code, 'calendar_not_started');
+    }
+    return;
+  }
   assert.equal((await guest('POST', '/advent/claim', { day: today })).status, 401, 'guests must sign in');
 
   const u = client();

@@ -126,3 +126,53 @@ test('timeout, server error and unreachable service are reported safely', async 
   const nowhere = new MagicalPioneerClient({ baseUrl: 'http://127.0.0.1:9/api/integration/v1', apiKey: MOCK_KEY, timeoutMs: 1000 });
   await rejectsWith(nowhere.me(), 'unreachable');
 });
+
+test('points: Idempotency-Key header, replay flag, refusals and missing scope', async () => {
+  const pm = createMagicalMock({ scopes: ['cards:verify', 'cards:link', 'cards:read', 'rewards:read', 'points:credit', 'points:debit'] });
+  const url = await pm.start();
+  try {
+    const c = new MagicalPioneerClient({ baseUrl: url, apiKey: MOCK_KEY, timeoutMs: 1000, allowPoints: true });
+    await c.link('cust-points', CARD, CVV);
+    const body = { customerId: 'cust-points', points: 25, reference: 'cm-grant-test-1', reason: 'game_reward', description: 'Unit test' };
+    const first = await c.creditPoints('christmas-store:credit:cm-grant-test-1', body);
+    assert.equal(first.replayed, false);
+    assert.equal(first.transaction.balanceAfter, 245);
+    assert.equal(pm.state.requests.at(-1).headers['idempotency-key'], 'christmas-store:credit:cm-grant-test-1');
+    const again = await c.creditPoints('christmas-store:credit:cm-grant-test-1', body);
+    assert.equal(again.replayed, true, 'same key → original answer replayed');
+    assert.equal(again.transaction.id, first.transaction.id);
+    assert.equal(pm.ledger.length, 1, 'executed once');
+    await rejectsWith(c.creditPoints('christmas-store:credit:cm-grant-test-1', { ...body, points: 26 }), 'idempotency_conflict');
+    await rejectsWith(c.creditPoints('christmas-store:credit:other-key', body), 'duplicate_reference');
+    const e = await rejectsWith(c.debitPoints('christmas-store:debit:cm-gift-test-1', { ...body, points: 9999, reference: 'cm-gift-test-1', reason: 'partner_redemption' }), 'insufficient_points');
+    assert.equal(e.status, 409);
+    assert.equal(pm.cards[CARD].balance, 245, 'nothing deducted');
+  } finally { await pm.stop(); }
+  // The default key (read scopes only) cannot move points.
+  const readOnly = new MagicalPioneerClient({ baseUrl: base, apiKey: MOCK_KEY, timeoutMs: 1000, allowPoints: true });
+  await rejectsWith(readOnly.creditPoints('christmas-store:credit:x-12345', { customerId: 'x', points: 1, reference: 'x-12345', reason: 'game_reward' }), 'insufficient_scope');
+});
+
+test('points guard: a client not explicitly allowed to move points refuses before any network request', async () => {
+  const before = mock.state.requests.length;
+  assert.equal(client.allowPoints, false, 'off by default');
+  const body = { customerId: 'x', points: 1, reference: 'guard-1', reason: 'game_reward' };
+  await rejectsWith(client.creditPoints('christmas-store:credit:guard-1', body), 'points_blocked');
+  await rejectsWith(client.debitPoints('christmas-store:debit:guard-1', { ...body, reason: 'partner_redemption' }), 'points_blocked');
+  assert.equal(mock.state.requests.length, before, 'nothing was sent');
+});
+
+test('points policy: only production, or a Magical on this machine, may move points', async () => {
+  const { pointsPolicy } = await import('../src/integrations/pioneer/pointsGuard.js');
+  const prodUrl = 'https://magical.am/api/integration/v1';
+  assert.deepEqual(pointsPolicy({ nodeEnv: 'development', baseUrl: prodUrl }), { allowed: false, reason: 'non_production_remote' });
+  assert.equal(pointsPolicy({ nodeEnv: 'test', baseUrl: prodUrl }).allowed, false);
+  assert.equal(pointsPolicy({ nodeEnv: 'development', baseUrl: 'https://staging.magical.am/api/integration/v1' }).allowed, false);
+  assert.equal(pointsPolicy({ nodeEnv: 'development', baseUrl: 'http://127.0.0.1.evil.example/api' }).allowed, false, 'look-alike hosts are not local');
+  assert.equal(pointsPolicy({ nodeEnv: 'development', baseUrl: 'http://localhost@magical.am/api' }).allowed, false, 'credentials trick is not local');
+  assert.equal(pointsPolicy({ nodeEnv: 'development', baseUrl: 'http://127.0.0.1:3900/api/integration/v1' }).allowed, true);
+  assert.equal(pointsPolicy({ nodeEnv: 'development', baseUrl: 'http://localhost:3000/api/integration/v1' }).allowed, true);
+  assert.equal(pointsPolicy({ nodeEnv: 'production', baseUrl: prodUrl }).allowed, true);
+  assert.deepEqual(pointsPolicy({ nodeEnv: 'production', baseUrl: prodUrl, pointsSwitch: 'off' }), { allowed: false, reason: 'switched_off' });
+  assert.equal(pointsPolicy({ nodeEnv: 'development', baseUrl: undefined }).allowed, false);
+});

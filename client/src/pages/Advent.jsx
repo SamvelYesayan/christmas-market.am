@@ -256,7 +256,7 @@ export default function Advent() {
           {g && <span className={`cal-chip st-${g.status}`}>{t(`advent.st_${g.status}`)}</span>}
         </div>
         <div className="cal-today">
-          {data.phase === 'before' ? <p><b>{t('advent.beforeTitle')}</b></p>
+          {data.phase === 'before' ? <p><b>{data.startsIn === 1 ? t('advent.beforeTomorrow') : t('advent.beforeTitle', { n: data.startsIn })}</b></p>
             : data.phase === 'over' ? <p><b>{t('advent.overTitle')}</b></p>
               : today && (today.status === 'available'
                 ? <button className={`btn cal-today-btn ${today.isGrand ? 'is-grand' : ''}`} onClick={(e) => choose(today, e.currentTarget)}>

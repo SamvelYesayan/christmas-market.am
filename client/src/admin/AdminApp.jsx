@@ -7,6 +7,7 @@ import { money } from '../lib.js';
 import Crud from './Crud.jsx';
 import ProductEditor from './ProductEditor.jsx';
 import AdminCalendar from './Calendar.jsx';
+import PioneerPoints from './PioneerPoints.jsx';
 import { PAY_STATUSES, STATUSES, payLabel, statusLabel } from '../pages/Order.jsx';
 import { LangSwitch } from '../i18n/index.jsx';
 
@@ -363,7 +364,7 @@ function PioneerLinks() {
         </section>
         <section className="admin-card">
           <h3>{at('How points work')}</h3>
-          <p className="muted small">{at('Card owners, points and rewards live in Magical. The store links a card only after Magical checks its number and 3-digit code, and only reads balances, history and rewards through the Magical Integration API — they cannot be edited here.')}</p>
+          <p className="muted small">{at('Card owners and points live in Magical. The store links a card only after Magical checks its number and 3-digit code. Game points are credited and gifts are paid for only through Magical (points:credit / points:debit); the store keeps no balance of its own.')}</p>
         </section>
       </div>
       <div className="table-wrap"><table className="admin-table">
@@ -385,6 +386,7 @@ function PioneerLinks() {
             <tr key={i}><td>{new Date(e.created_at).toLocaleString()}</td><td>{at(EVENT_LABEL[e.event] ?? e.event)}</td><td dir="ltr">{e.card_masked ?? ''}</td><td>{e.email ?? ''}</td><td className="muted">{e.actor ? `${at('by')} ${e.actor}` : ''}{e.detail ? ` · ${e.detail}` : ''}</td></tr>))}</tbody></table>
         )}
       </section>
+      <PioneerPoints health={d.connection.health} />
     </div>
   );
 }

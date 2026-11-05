@@ -12,7 +12,8 @@
     "seed:demo": "node --env-file-if-exists=.env scripts/seed-demo.js",
     "admin:create": "node --env-file-if-exists=.env scripts/create-admin.js",
     "backup": "node --env-file-if-exists=.env scripts/backup.js",
-    "test": "node --env-file-if-exists=.env --test test/*.test.js"
+    "test": "node --env-file-if-exists=.env --test test/*.test.js",
+    "magical:mock": "node scripts/magical-mock.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
