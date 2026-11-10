@@ -6,7 +6,7 @@ import { api } from '../api/client.js';
 import { useApp } from '../state/AppState.jsx';
 import { storage, useAsync } from '../lib.js';
 import { Castle, Crest } from '../art/Scenes.jsx';
-import { Chapter, GiftTag, Loader, Ribbon } from '../components/Common.jsx';
+import { Chapter, GiftTag, Loader, Ribbon, LoadError } from '../components/Common.jsx';
 import { HiddenWonder } from '../components/Shell.jsx';
 import { celebrate } from '../effects/celebrate.js';
 import { useI18n } from '../i18n/index.jsx';
@@ -24,7 +24,7 @@ function Candles() {
 function Ceremony({ onSorted }) {
   const { user, persona, refreshUser, toast } = useApp();
   const { t } = useI18n();
-  const [qs] = useAsync(() => api.get('/academy/sorting'), []);
+  const [qs, , reloadQuestions] = useAsync(() => api.get('/academy/sorting'), []);
   const [i, setI] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [thinking, setThinking] = useState(false);
@@ -48,6 +48,7 @@ function Ceremony({ onSorted }) {
     }
   };
   if (qs.loading) return <Loader label={t('academy.waking')} />;
+  if (qs.error) return <LoadError error={qs.error} onRetry={reloadQuestions} />;
   return (
     <section className="ceremony">
       <Candles />
@@ -170,7 +171,7 @@ export default function Academy() {
   const { t } = useI18n();
   const [me, setMe] = useState(undefined);
   const [stage, setStage] = useState('gate');
-  const [houses] = useAsync(() => api.get('/academy/houses'), []);
+  const [houses, , reloadHouses] = useAsync(() => api.get('/academy/houses'), []);
   const [shop] = useAsync(() => api.get('/academy/shop'), []);
 
   useEffect(() => {
@@ -200,6 +201,7 @@ export default function Academy() {
       <section className="section">
         <div className="wrap">
           <Chapter eyebrow={t('academy.housesEyebrow')} title={t('academy.housesTitle')} />
+          {houses.error && <LoadError error={houses.error} onRetry={reloadHouses} />}
           <div className="houses">
             {(houses.data?.houses ?? []).map((h, i) => (
               <motion.article key={h.slug} className="house-card" style={{ '--h': h.color, '--a': h.accent }} initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}>

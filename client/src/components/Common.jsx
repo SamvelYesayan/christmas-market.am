@@ -1,11 +1,23 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { money, pct } from '../lib.js';
 import { useApp } from '../state/AppState.jsx';
 import { api } from '../api/client.js';
 import Art, { ProductVisual } from '../art/Art.jsx';
 import { translate, useI18n } from '../i18n/index.jsx';
+
+/** Shown when data could not be loaded: the server's message and a way to try again (never an endless spinner). */
+export function LoadError({ error, onRetry }) {
+  const { t } = useI18n();
+  return (
+    <div className="empty" role="alert">
+      <h3>{t('common.loadFailed')}</h3>
+      <p>{error?.message ?? t('common.error')}</p>
+      {onRetry && <button className="btn" onClick={onRetry}>{t('common.retry')}</button>}
+    </div>
+  );
+}
 
 export function Chapter({ num, title, children, centered, eyebrow }) {
   const { t } = useI18n();
@@ -66,11 +78,13 @@ export function Empty({ art = { type: 'snowglobe', c1: '#0b1430', c2: '#a9c7ff' 
   );
 }
 
-/** A product as a gift tag hanging from a ribbon. Variants: 'tag' (default), 'window' (feature), 'mini'. */
+/** A product card: picture, name, price, availability and a clear Add to cart. Variant 'mini' is the compact form. */
 export function GiftTag({ product, variant = 'tag', index = 0, reason }) {
-  const { user, toast } = useApp();
+  const { user, toast, addToCart } = useApp();
   const { t } = useI18n();
+  const nav = useNavigate();
   const [wished, setWished] = useState(false);
+  const [adding, setAdding] = useState(false);
   const discount = pct(product.price, product.salePrice);
   const soldOut = product.stock === 0;
 
@@ -90,14 +104,33 @@ export function GiftTag({ product, variant = 'tag', index = 0, reason }) {
     }
   };
 
+  // One tap when there is nothing to choose; otherwise the product page, where the options are.
+  const quickAdd = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (adding) return;
+    const button = e.currentTarget;
+    setAdding(true);
+    try {
+      const { product: full } = await api.get(`/products/${product.slug}`);
+      const available = full.variants.filter((v) => v.stock > 0);
+      if (available.length === 1 && !full.isPersonalizable) {
+        await addToCart(available[0].id, 1, undefined, button);
+        toast(t('sleigh.added', { name: product.name }), { icon: '🛷' });
+      } else nav(`/product/${product.slug}`);
+    } catch (err) {
+      toast(err.message, { tone: 'error' });
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <motion.article className={`gift-tag gift-tag--${variant}`} style={{ '--i': index, '--tag-color': product.art?.c1 ?? '#c8102e' }}
-      initial={{ opacity: 0, y: 40, rotate: index % 2 ? 2 : -2 }} whileInView={{ opacity: 1, y: 0, rotate: 0 }}
-      viewport={{ once: true, margin: '-30px' }} transition={{ duration: 0.8, delay: (index % 4) * 0.08, ease: [0.22, 1, 0.36, 1] }}>
+      initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-30px' }} transition={{ duration: 0.4, delay: (index % 4) * 0.04 }}>
       <Link to={`/product/${product.slug}`} className="gift-tag-link">
-        <span className="gift-tag-string" aria-hidden="true" />
         <div className="gift-tag-card">
-          <span className="gift-tag-hole" aria-hidden="true" />
           <div className="gift-tag-visual">
             <motion.div layoutId={variant === 'mini' ? undefined : `visual-${product.slug}`} className="gift-tag-art">
               <ProductVisual product={product} />
@@ -106,7 +139,6 @@ export function GiftTag({ product, variant = 'tag', index = 0, reason }) {
               {product.isLimited && <span className="badge badge-gold">{t('common.limited')}</span>}
               {discount > 0 && <span className="badge badge-red">−{discount}%</span>}
               {product.isMagic && <span className="badge badge-blue">{t('common.magic')}</span>}
-              {soldOut && <span className="badge badge-test">{t('common.soldOut')}</span>}
             </div>
             {product.match != null && <span className="gift-tag-match">{t('common.match', { n: product.match })}</span>}
           </div>
@@ -121,6 +153,8 @@ export function GiftTag({ product, variant = 'tag', index = 0, reason }) {
                 <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" /></svg>
               </button>
             </div>
+            <p className={`gift-tag-stock ${soldOut ? 'out' : product.stock < 6 ? 'low' : ''}`}>{soldOut ? t('common.soldOut') : product.stock < 6 ? t('tag.low', { n: product.stock }) : t('product.inStock')}</p>
+            <button className="btn btn-sm btn-block gift-tag-add" onClick={quickAdd} disabled={soldOut || adding}>{adding ? t('tag.adding') : t('tag.add')}</button>
           </div>
         </div>
       </Link>
@@ -131,9 +165,6 @@ export function GiftTag({ product, variant = 'tag', index = 0, reason }) {
 export function Ribbon({ children, className = '' }) {
   return (
     <div className={`tag-ribbon ${className}`}>
-      <svg className="tag-ribbon-line" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M0 10 Q 250 50 500 18 T 1000 10" stroke="var(--ember)" strokeWidth="4" fill="none" />
-      </svg>
       <div className="tag-ribbon-row">{children}</div>
     </div>
   );

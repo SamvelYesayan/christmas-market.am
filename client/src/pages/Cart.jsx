@@ -4,7 +4,7 @@ import { api } from '../api/client.js';
 import { useApp } from '../state/AppState.jsx';
 import { money } from '../lib.js';
 import { ProductVisual } from '../art/Art.jsx';
-import { Empty } from '../components/Common.jsx';
+import { Empty, LoadError } from '../components/Common.jsx';
 import { useI18n } from '../i18n/index.jsx';
 
 export function CouponBox() {
@@ -56,7 +56,7 @@ export function Totals({ quote, showShipping = false }) {
 }
 
 export default function Cart() {
-  const { cart, setCart, toast, user, pioneerStatus } = useApp();
+  const { cart, setCart, cartError, refreshCart, toast, user, pioneerStatus } = useApp();
   const { t } = useI18n();
   useEffect(() => { document.title = `${t('cart.title')} · ${t('brand.name')}`; }, [t]);
   const update = async (id, quantity) => {
@@ -66,6 +66,7 @@ export default function Cart() {
       toast(e.message, { tone: 'error' });
     }
   };
+  if (!cart.items.length && cartError) return <div className="wrap"><LoadError error={cartError} onRetry={() => refreshCart().catch(() => {})} /></div>;
   if (!cart.items.length) {
     return <div className="wrap"><Empty art={{ type: 'sleigh', c1: '#c8102e' }} title={t('cart.empty')}><p className="muted">{t('cart.emptyBody')}</p><Link className="btn" to="/shop">{t('common.visitMarket')}</Link></Empty></div>;
   }

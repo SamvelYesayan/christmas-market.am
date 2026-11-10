@@ -1,5 +1,5 @@
 // Small shared helpers.
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 const amd = new Intl.NumberFormat('en-US');
 export const money = (n) => `${amd.format(Math.round(n ?? 0))} ֏`;
@@ -54,6 +54,8 @@ export function deviceQuality() {
 
 export function useAsync(fn, deps = []) {
   const [state, setState] = useState({ loading: true, data: null, error: null });
+  const [attempt, setAttempt] = useState(0);
+  const reload = useCallback(() => setAttempt((n) => n + 1), []);
   useEffect(() => {
     let alive = true;
     setState((s) => ({ ...s, loading: true, error: null }));
@@ -65,8 +67,8 @@ export function useAsync(fn, deps = []) {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  return [state, setState];
+  }, [...deps, attempt]);
+  return [state, setState, reload];
 }
 
 export const pct = (price, sale) => (sale != null && price ? Math.round((1 - sale / price) * 100) : 0);

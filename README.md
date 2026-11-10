@@ -58,6 +58,9 @@ Pick one:
   ```
   `DATABASE_URL=postgres://christmas@localhost:5433/christmas_market`
 
+  This cluster is not a Windows service, so it stops when the computer restarts. `npm run dev` starts it again
+  automatically (`server/scripts/ensure-dev-db.js`); if the site opens with no data, check `GET /api/health`.
+
 ### Migrate, seed, run
 ```bash
 npm run db:migrate        # applies server/migrations/*.sql
@@ -150,6 +153,11 @@ npm test
 15 end-to-end API tests cover origin checks, auth, admin protection, cart/stock, coupons, COD and TEST checkout,
 order tracking privacy, Advent locking, wheel daily limit, catch-game anti-cheat, quiz answer secrecy,
 Pioneer sandbox linking, sorting, dashboard and admin writes (including image upload validation).
+`server/test/mobile-auth.test.js` covers the native app's session path (bearer token, guest cart header).
+
+### Native app
+The Android/iOS app lives in [`mobile/`](mobile/README.md) (Expo, isolated from the npm workspaces). It reuses the
+same API; see `mobile/docs/` for the feature inventory, API mapping, build guide and known limitations.
 
 ## 8. Deployment
 One Node process serves the API and the built client (single origin, so cookies stay first-party).

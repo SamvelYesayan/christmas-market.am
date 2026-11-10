@@ -80,6 +80,14 @@ christmas-market.am/
 - Passwords: bcrypt (cost 12). Sessions: 256-bit random token in an `HttpOnly; SameSite=Lax; Secure(prod)`
   cookie, only its SHA-256 stored in `sessions` → revocable, nothing sensitive in JS.
 - CSRF: SameSite cookies + Origin/Referer check on every mutating request.
+- Native app (`mobile/`): requests carry `X-Christmas-Client: mobile`. For those requests only, the same session
+  token is accepted as `Authorization: Bearer <token>` (returned once in the login/register/password-change body as
+  `session: { token, expiresAt }`, stored only in the phone's secure storage, no cookie set), and the guest cart
+  token travels as `X-Cart-Token` (request + response header) instead of the `mc_cart` cookie. A write with the app
+  header and **no** Origin/Referer skips the Origin check (no ambient cookies → nothing for CSRF to ride on; a
+  browser cannot add the header cross-site without a CORS preflight the allow-list refuses). Browser behaviour is
+  unchanged. Code: `middleware/auth.js` (`sessionToken`, `isMobileClient`), `middleware/security.js`
+  (`originCheck`), `services/cart.js`; tests: `test/mobile-auth.test.js`; details: `mobile/docs/ARCHITECTURE.md`.
 - `helmet` (CSP), CORS allow-list, `express-rate-limit` (global, auth, games, pioneer tiers).
 - All input validated with zod; all SQL parameterised; uploads restricted by magic bytes and size.
 - Admin routes: `requireAuth` + `requireRole('admin')`, every admin write recorded in `audit_log`.

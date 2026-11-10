@@ -12,6 +12,7 @@ import './styles/experiences.css';
 import './styles/intro-music.css';
 import './styles/wishes.css';
 import './styles/calendar.css';
+import './styles/simple.css';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

@@ -14,6 +14,8 @@ const CONSENT_KEY = 'mc.consent';
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [cartError, setCartError] = useState(null);
   const [cart, setCart] = useState({ items: [], count: 0, total: 0, subtotal: 0 });
   const [cartOpen, setCartOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -31,15 +33,27 @@ export function AppProvider({ children }) {
   }, []);
 
   const refreshUser = useCallback(async () => {
-    const { user: u } = await api.get('/auth/me');
-    setUser(u);
-    return u;
+    try {
+      const { user: u } = await api.get('/auth/me');
+      setUser(u);
+      setAuthError(null);
+      return u;
+    } catch (e) {
+      setAuthError(e);
+      throw e;
+    }
   }, []);
 
   const refreshCart = useCallback(async () => {
-    const c = await api.get('/cart');
-    setCart(c);
-    return c;
+    try {
+      const c = await api.get('/cart');
+      setCart(c);
+      setCartError(null);
+      return c;
+    } catch (e) {
+      setCartError(e);
+      throw e;
+    }
   }, []);
 
   useEffect(() => {
@@ -159,8 +173,8 @@ export function AppProvider({ children }) {
   }, [toast]);
 
   const value = {
-    user, authReady, refreshUser, login, register, logout, setUser,
-    cart, setCart, refreshCart, addToCart, cartOpen, setCartOpen,
+    user, authReady, authError, refreshUser, login, register, logout, setUser,
+    cart, setCart, cartError, refreshCart, addToCart, cartOpen, setCartOpen,
     persona, savePersona, forgetPersona,
     calm, setCalm, consent, setConsent,
     toasts, toast, rewardCelebration,

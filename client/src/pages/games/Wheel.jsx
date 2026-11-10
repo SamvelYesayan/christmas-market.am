@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client.js';
 import { useApp } from '../../state/AppState.jsx';
 import { useAsync } from '../../lib.js';
-import { Loader } from '../../components/Common.jsx';
+import { Loader, LoadError } from '../../components/Common.jsx';
 import { GameFrame, SignInGate } from '../Games.jsx';
 import { useI18n } from '../../i18n/index.jsx';
 
 export default function Wheel() {
   const { user, rewardCelebration, toast } = useApp();
   const { t } = useI18n();
-  const [state] = useAsync(() => api.get('/games/wheel'), [user?.id]);
+  const [state, , reload] = useAsync(() => api.get('/games/wheel'), [user?.id]);
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState(null);
   const wheel = useRef(null);
@@ -18,6 +18,7 @@ export default function Wheel() {
   useEffect(() => { if (state.data?.lastReward) setResult(state.data.lastReward); }, [state.data]);
 
   if (state.loading) return <Loader />;
+  if (state.error) return <GameFrame title={t('games.wheel.title')}><LoadError error={state.error} onRetry={reload} /></GameFrame>;
   const segs = state.data?.segments ?? [];
   const n = segs.length || 1;
   const slice = 360 / n;

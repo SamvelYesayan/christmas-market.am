@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api/client.js';
 import { useApp } from '../state/AppState.jsx';
 import { useAsync } from '../lib.js';
-import { Price } from '../components/Common.jsx';
+import { LoadError, Price } from '../components/Common.jsx';
 import { HiddenWonder } from '../components/Shell.jsx';
 import { ProductVisual } from '../art/Art.jsx';
 import { CardVisual } from '../components/PioneerCard.jsx';
@@ -70,10 +70,11 @@ function MemberOffers() {
   const { user, pioneerStatus, refreshUser } = useApp();
   const [n, setN] = useState(0);
   const [redeeming, setRedeeming] = useState(null);
-  const [offers] = useAsync(() => api.get('/pioneer/offers'), [n]);
+  const [offers, , reloadOffers] = useAsync(() => api.get('/pioneer/offers'), [n]);
   const linked = !!user?.pioneer;
   const canRedeem = !!pioneerStatus?.pointsRedeemable;
-  const list = offers.data?.offers ?? [];
+  const list = [...(offers.data?.offers ?? [])].sort((a, b) => Number(b.redeemable) - Number(a.redeemable)); // gifts you can get with points first
+  if (offers.error) return <section className="section"><LoadError error={offers.error} onRetry={reloadOffers} /></section>;
   if (!list.length) return null;
   return (
     <section className="section">

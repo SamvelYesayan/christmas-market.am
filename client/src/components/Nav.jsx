@@ -1,24 +1,24 @@
-// Desktop: a garland strung across the top, shopping links hang beneath like ornament tags.
-// Mobile: a slim top bar (brand, language, music, cart) plus a bottom tab bar (Home, Shop, Gift Finder, Account, Menu).
+// Desktop: plain links (Home, Shop, Categories, Offers, Pioneer Card, More) with search, account and cart on the right.
+// Phone/tablet: a slim top bar (brand, music, search, menu) plus bottom tabs for what people need most:
+// Home, Shop, Cart, Pioneer Card, Account. The mobile app uses the same five tabs.
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { api } from '../api/client.js';
+import { useAsync } from '../lib.js';
 import { useApp } from '../state/AppState.jsx';
 import { LangSwitch, useI18n } from '../i18n/index.jsx';
 import MusicPlayer from './MusicPlayer.jsx';
 
-// What a shopper needs first, always visible.
-const PRIMARY = [
-  { to: '/shop', key: 'market', color: '#c8102e' },
-  { to: '/gift-finder', key: 'finder', color: '#f2c46d' },
-  { to: '/pioneer', key: 'pioneer', color: '#b8860b' },
+// Everything beyond shopping lives under "More", so it never competes with the shop.
+const MORE = [
+  { to: '/gift-finder', key: 'finder' },
+  { to: '/advent', key: 'advent' },
+  { to: '/games', key: 'games' },
+  { to: '/academy', key: 'academy' },
+  { to: '/track', key: 'track' },
 ];
-// The seasonal extras, grouped so they don't compete with shopping.
-const FUN = [
-  { to: '/advent', key: 'advent', color: '#0f6b4f' },
-  { to: '/games', key: 'games', color: '#c8102e' },
-  { to: '/academy', key: 'academy', color: '#2a4fa8' },
-];
+const OFFERS = '/shop?onSale=true';
 
 const Icon = {
   search: <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>,
@@ -27,6 +27,7 @@ const Icon = {
   home: <svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z" /><path d="M10 20v-5h4v5" /></svg>,
   shop: <svg viewBox="0 0 24 24"><path d="M4 9h16l-1.5 11h-13z" /><path d="M8 9V7a4 4 0 0 1 8 0v2" /></svg>,
   gift: <svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="11" rx="1.5" /><path d="M3 13h18M12 9v11" /><path d="M12 9c-2-4-6-4-6-1.5S9 9 12 9c3 0 6-.5 6-1.5S14 5 12 9z" /></svg>,
+  card: <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M7 15h4" /></svg>,
   menu: <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>,
 };
 
@@ -45,39 +46,43 @@ function Brand() {
   );
 }
 
-function CartButton() {
+function CartButton({ className = 'nav-cart', children }) {
   const { cart, setCartOpen } = useApp();
   const { t } = useI18n();
   return (
-    <button className="nav-ico sleigh-target" onClick={() => setCartOpen(true)} aria-label={t('nav.sleighItems', { n: cart.count })} data-sleigh>
-      {Icon.sleigh}
-      {cart.count > 0 && <motion.span key={cart.count} className="nav-count" initial={{ scale: 0.4 }} animate={{ scale: 1 }}>{cart.count}</motion.span>}
+    <button className={className} onClick={() => setCartOpen(true)} aria-label={t('nav.sleighItems', { n: cart.count })} data-sleigh>
+      <span className="nav-cart-icon">
+        {Icon.sleigh}
+        {cart.count > 0 && <motion.span key={cart.count} className="nav-count" initial={{ scale: 0.4 }} animate={{ scale: 1 }}>{cart.count}</motion.span>}
+      </span>
+      {children}
     </button>
   );
 }
 
-function Icons({ onSearch }) {
+function Icons({ onSearch, onMenu, menuOpen }) {
   const { user } = useApp();
   const { t } = useI18n();
   return (
     <div className="nav-icons">
-      <LangSwitch className="hide-xs" />
+      <LangSwitch className="hide-lg" />
       <MusicPlayer />
-      <button className="nav-ico hide-md" onClick={onSearch} aria-label={t('nav.search')}>{Icon.search}</button>
+      <button className="nav-ico" onClick={onSearch} aria-label={t('nav.search')}>{Icon.search}</button>
       <Link className="nav-account hide-md" to={user ? '/account' : '/login'}>
         {Icon.user}<span>{user ? t('nav.account') : t('common.signIn')}</span>
       </Link>
-      <CartButton />
+      <CartButton className="nav-cart hide-md"><span>{t('nav.cart')}</span></CartButton>
+      <button className="nav-ico show-md" onClick={onMenu} aria-expanded={menuOpen} aria-label={t('nav.menu')}>{Icon.menu}</button>
     </div>
   );
 }
 
-function FunMenu() {
-  const { t } = useI18n();
+/** A plain dropdown in the desktop navigation. */
+function Dropdown({ label, active, wide, children }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const loc = useLocation();
-  useEffect(() => setOpen(false), [loc.pathname]);
+  useEffect(() => setOpen(false), [loc.pathname, loc.search]);
   useEffect(() => {
     if (!open) return undefined;
     const close = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
@@ -86,23 +91,52 @@ function FunMenu() {
     document.addEventListener('keydown', esc);
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', esc); };
   }, [open]);
-  const active = FUN.some((l) => loc.pathname.startsWith(l.to));
   return (
-    <div className="nav-tag nav-fun" ref={ref} style={{ '--tag': '#0f6b4f', '--d': `${PRIMARY.length * 0.12}s` }}>
-      <span className="nav-tag-string" aria-hidden="true" />
-      <button className={`nav-tag-body ${active ? 'is-active' : ''}`} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((v) => !v)}>
-        {t('nav.fun')} <span aria-hidden="true">▾</span>
+    <div className="nav-drop" ref={ref}>
+      <button className={`nav-link ${active ? 'active' : ''}`} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((v) => !v)}>
+        {label} <span className="nav-caret" aria-hidden="true">▾</span>
       </button>
       <AnimatePresence>
         {open && (
-          <motion.ul className="nav-fun-menu" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}>
-            {FUN.map((l) => (
-              <li key={l.to}><NavLink to={l.to} style={{ '--tag': l.color }}><b>{t(`nav.${l.key}`)}</b><small>{t(`nav.${l.key}Hint`)}</small></NavLink></li>
-            ))}
-          </motion.ul>
+          <motion.div className={`nav-drop-menu ${wide ? 'wide' : ''}`} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.16 }}>
+            {children}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+function useCategories() {
+  const { lang } = useI18n();
+  const [state] = useAsync(() => api.get('/categories'), [lang]);
+  return state.data?.categories ?? [];
+}
+
+function MainLinks({ cats }) {
+  const { t } = useI18n();
+  const loc = useLocation();
+  const onOffers = loc.pathname === '/shop' && new URLSearchParams(loc.search).has('onSale');
+  const inMore = MORE.some((l) => loc.pathname.startsWith(l.to));
+  return (
+    <nav className="nav-links" aria-label={t('nav.main')}>
+      <NavLink to="/" end className="nav-link">{t('nav.home')}</NavLink>
+      <Link to="/shop" className={`nav-link ${loc.pathname === '/shop' && !onOffers ? 'active' : ''}`}>{t('nav.market')}</Link>
+      <Dropdown label={t('nav.categories')} active={loc.pathname.startsWith('/shop/')} wide>
+        <Link className="nav-drop-all" to="/shop">{t('shop.allStalls')}</Link>
+        <ul className="nav-drop-cats">
+          {cats.map((c) => <li key={c.slug}><NavLink to={`/shop/${c.slug}`}>{c.name}</NavLink></li>)}
+        </ul>
+      </Dropdown>
+      <Link to={OFFERS} className={`nav-link ${onOffers ? 'active' : ''}`}>{t('nav.offers')}</Link>
+      <NavLink to="/pioneer" className="nav-link">{t('nav.pioneer')}</NavLink>
+      <Dropdown label={t('nav.more')} active={inMore}>
+        <ul className="nav-drop-list">
+          {MORE.map((l) => <li key={l.to}><NavLink to={l.to}><b>{t(`nav.${l.key}`)}</b><small>{t(`nav.${l.key}Hint`)}</small></NavLink></li>)}
+        </ul>
+        <div className="nav-drop-lang show-lg"><LangSwitch /></div>
+      </Dropdown>
+    </nav>
   );
 }
 
@@ -132,7 +166,7 @@ function SearchOverlay({ open, onClose }) {
   );
 }
 
-function MobileMenu({ open, onClose, onSearch }) {
+function MobileMenu({ open, onClose, cats }) {
   const { t } = useI18n();
   const { user } = useApp();
   useEffect(() => {
@@ -147,16 +181,16 @@ function MobileMenu({ open, onClose, onSearch }) {
         <motion.div className="mobile-menu" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
           <motion.nav className="mobile-menu-sheet" aria-label={t('nav.menu')} onClick={(e) => e.stopPropagation()}
             initial={{ y: 40 }} animate={{ y: 0 }} exit={{ y: 40 }} transition={{ type: 'spring', damping: 26, stiffness: 260 }}>
-            <div className="mobile-menu-top">
-              <LangSwitch />
-              <button className="chip" onClick={() => { onClose(); onSearch(); }}>🔍 {t('common.search')}</button>
+            <div className="mobile-menu-top"><b>{t('nav.menu')}</b><LangSwitch /></div>
+            <h3 className="mobile-menu-h">{t('nav.categories')}</h3>
+            <div className="mobile-menu-cats">
+              <Link className="chip" to="/shop" onClick={onClose}>{t('shop.allStalls')}</Link>
+              {cats.map((c) => <Link key={c.slug} className="chip" to={`/shop/${c.slug}`} onClick={onClose}>{c.name}</Link>)}
             </div>
             <ul>
-              {[...PRIMARY, ...FUN].map((l) => (
-                <li key={l.to}><NavLink to={l.to} style={{ '--tag': l.color }}><b>{t(`nav.${l.key}`)}</b><small>{t(`nav.${l.key}Hint`)}</small></NavLink></li>
-              ))}
-              <li><NavLink to="/track" style={{ '--tag': '#a9c7ff' }}><b>{t('nav.track')}</b><small>{t('nav.trackHint')}</small></NavLink></li>
-              {user && <li><NavLink to="/account/wishlist" style={{ '--tag': '#ff5a6e' }}><b>{t('nav.wishlist')}</b><small>{t('nav.wishlistHint')}</small></NavLink></li>}
+              <li><Link to={OFFERS} onClick={onClose}><b>{t('nav.offers')}</b><small>{t('nav.offersHint')}</small></Link></li>
+              {MORE.map((l) => <li key={l.to}><NavLink to={l.to} onClick={onClose}><b>{t(`nav.${l.key}`)}</b><small>{t(`nav.${l.key}Hint`)}</small></NavLink></li>)}
+              {user && <li><NavLink to="/account/wishlist" onClick={onClose}><b>{t('nav.wishlist')}</b><small>{t('nav.wishlistHint')}</small></NavLink></li>}
             </ul>
           </motion.nav>
         </motion.div>
@@ -165,21 +199,16 @@ function MobileMenu({ open, onClose, onSearch }) {
   );
 }
 
-function TabBar({ menuOpen, onMenu }) {
+function TabBar() {
   const { t } = useI18n();
   const { user } = useApp();
-  const tabs = [
-    { to: '/', label: t('nav.home'), icon: Icon.home, end: true },
-    { to: '/shop', label: t('nav.market'), icon: Icon.shop },
-    { to: '/gift-finder', label: t('nav.finderShort'), icon: Icon.gift },
-    { to: user ? '/account' : '/login', label: user ? t('nav.account') : t('common.signIn'), icon: Icon.user },
-  ];
   return (
     <nav className="tabbar" aria-label={t('nav.main')}>
-      {tabs.map((tb) => (
-        <NavLink key={tb.label} to={tb.to} end={tb.end} className="tabbar-item" aria-label={tb.label}>{tb.icon}<span aria-hidden="true">{tb.label}</span></NavLink>
-      ))}
-      <button className={`tabbar-item ${menuOpen ? 'active' : ''}`} onClick={onMenu} aria-expanded={menuOpen} aria-label={t('nav.menu')}>{Icon.menu}<span aria-hidden="true">{t('nav.menu')}</span></button>
+      <NavLink to="/" end className="tabbar-item">{Icon.home}<span>{t('nav.home')}</span></NavLink>
+      <NavLink to="/shop" className="tabbar-item">{Icon.shop}<span>{t('nav.market')}</span></NavLink>
+      <CartButton className="tabbar-item"><span>{t('nav.cart')}</span></CartButton>
+      <NavLink to="/pioneer" className="tabbar-item">{Icon.card}<span>{t('nav.pioneerShort')}</span></NavLink>
+      <NavLink to={user ? '/account' : '/login'} className="tabbar-item">{Icon.user}<span>{user ? t('nav.accountShort') : t('common.signIn')}</span></NavLink>
     </nav>
   );
 }
@@ -190,13 +219,14 @@ export default function Nav() {
   const [search, setSearch] = useState(false);
   const loc = useLocation();
   const { t } = useI18n();
+  const cats = useCategories();
   useEffect(() => {
     const on = () => setScrolled(window.scrollY > 30);
     on();
     window.addEventListener('scroll', on, { passive: true });
     return () => window.removeEventListener('scroll', on);
   }, []);
-  useEffect(() => { setMenu(false); setSearch(false); }, [loc.pathname]);
+  useEffect(() => { setMenu(false); setSearch(false); }, [loc.pathname, loc.search]);
 
   return (
     <>
@@ -213,20 +243,12 @@ export default function Nav() {
         </svg>
         <div className="nav-inner wrap">
           <Brand />
-          <nav className="nav-links" aria-label={t('nav.main')}>
-            {PRIMARY.map((l, i) => (
-              <NavLink key={l.to} to={l.to} className="nav-tag" style={{ '--tag': l.color, '--d': `${i * 0.12}s` }}>
-                <span className="nav-tag-string" aria-hidden="true" />
-                <span className="nav-tag-body">{t(`nav.${l.key}`)}</span>
-              </NavLink>
-            ))}
-            <FunMenu />
-          </nav>
-          <Icons onSearch={() => setSearch(true)} />
+          <MainLinks cats={cats} />
+          <Icons onSearch={() => setSearch(true)} onMenu={() => setMenu((v) => !v)} menuOpen={menu} />
         </div>
       </header>
-      <TabBar menuOpen={menu} onMenu={() => setMenu((v) => !v)} />
-      <MobileMenu open={menu} onClose={() => setMenu(false)} onSearch={() => setSearch(true)} />
+      <TabBar />
+      <MobileMenu open={menu} onClose={() => setMenu(false)} cats={cats} />
       <SearchOverlay open={search} onClose={() => setSearch(false)} />
     </>
   );

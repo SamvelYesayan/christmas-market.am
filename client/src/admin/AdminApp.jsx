@@ -4,6 +4,7 @@ import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from '
 import { api, qs } from '../api/client.js';
 import { useApp } from '../state/AppState.jsx';
 import { money } from '../lib.js';
+import { LoadError } from '../components/Common.jsx';
 import Crud from './Crud.jsx';
 import ProductEditor from './ProductEditor.jsx';
 import AdminCalendar from './Calendar.jsx';
@@ -53,7 +54,10 @@ function Dashboard() {
   const at = useAt();
   const [days, setDays] = useState(30);
   const [d, setD] = useState(null);
-  useEffect(() => { setD(null); api.get(`/admin/analytics?days=${days}`).then(setD); }, [days]);
+  const [loadError, setLoadError] = useState(null);
+  const load = () => { setD(null); setLoadError(null); api.get(`/admin/analytics?days=${days}`).then(setD, setLoadError); };
+  useEffect(() => { load(); }, [days]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (loadError) return <LoadError error={loadError} onRetry={load} />;
   if (!d) return <p className="muted">{at('Counting the gifts…')}</p>;
   const delta = (cur, prev) => (prev ? `${cur >= prev ? '▲' : '▼'} ${Math.abs(Math.round(((cur - prev) / prev) * 100))}% ${at('vs previous')}` : at('no previous data'));
   const funnel = [[at('Visits'), d.funnel.visits], [at('Product views'), d.funnel.productViews], [at('Add to sleigh'), d.funnel.addToCart], [at('Checkout started'), d.funnel.checkout], [at('Orders'), d.funnel.purchases]];
@@ -106,8 +110,10 @@ function Products() {
   const [items, setItems] = useState(null);
   const [q, setQ] = useState('');
   const [low, setLow] = useState(false);
-  const load = () => api.get(`/admin/products${qs({ q, lowStock: low ? 'true' : '' })}`).then((r) => setItems(r.items));
+  const [loadError, setLoadError] = useState(null);
+  const load = () => { setLoadError(null); return api.get(`/admin/products${qs({ q, lowStock: low ? 'true' : '' })}`).then((r) => setItems(r.items), setLoadError); };
   useEffect(() => { load(); }, [low]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (loadError && !items) return <LoadError error={loadError} onRetry={load} />;
   return (
     <div className="admin-section">
       <header className="admin-head">
@@ -141,8 +147,10 @@ function Orders() {
   const [filters, setFilters] = useState({ q: '', status: '', payment: '', test: 'false', from: '', to: '' });
   const [data, setData] = useState(null);
   const [page, setPage] = useState(1);
-  const load = () => api.get(`/admin/orders${qs({ ...filters, page })}`).then(setData);
+  const [loadError, setLoadError] = useState(null);
+  const load = () => { setLoadError(null); return api.get(`/admin/orders${qs({ ...filters, page })}`).then(setData, setLoadError); };
   useEffect(() => { load(); }, [filters.status, filters.payment, filters.test, page]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (loadError && !data) return <LoadError error={loadError} onRetry={load} />;
   const set = (k) => (e) => { setPage(1); setFilters({ ...filters, [k]: e.target.value }); };
   return (
     <div className="admin-section">
@@ -186,7 +194,7 @@ function OrderDetail() {
   const [o, setO] = useState(null);
   const [f, setF] = useState({ status: '', note: '', trackingCode: '', deliveryDate: '', markPaid: false });
   const load = () => api.get(`/admin/orders/${number}`).then((r) => { setO(r.order); setF({ status: r.order.status, note: '', trackingCode: r.order.trackingCode ?? '', deliveryDate: r.order.delivery.date ?? '', markPaid: false }); });
-  useEffect(() => { load(); }, [number]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load().catch((e) => toast(e.message, { tone: 'error' })); }, [number]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!o) return <p className="muted">{at('Loading…')}</p>;
   const save = async (e) => {
     e.preventDefault();
@@ -396,8 +404,10 @@ function Customers() {
   const [items, setItems] = useState(null);
   const [q, setQ] = useState('');
   const [pioneer, setPioneer] = useState(false);
-  const load = () => api.get(`/admin/customers${qs({ q, pioneer: pioneer ? 'true' : '' })}`).then((r) => setItems(r.items));
+  const [loadError, setLoadError] = useState(null);
+  const load = () => { setLoadError(null); return api.get(`/admin/customers${qs({ q, pioneer: pioneer ? 'true' : '' })}`).then((r) => setItems(r.items), setLoadError); };
   useEffect(() => { load(); }, [pioneer]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (loadError && !items) return <LoadError error={loadError} onRetry={load} />;
   return (
     <div className="admin-section">
       <header className="admin-head"><h1>{at('Customers')}</h1>
@@ -425,8 +435,10 @@ function CustomerDetail() {
   const { id } = useParams();
   const { toast, user: me } = useApp();
   const [u, setU] = useState(null);
-  const load = () => api.get(`/admin/customers/${id}`).then((r) => setU(r.item));
+  const [loadError, setLoadError] = useState(null);
+  const load = () => { setLoadError(null); return api.get(`/admin/customers/${id}`).then((r) => setU(r.item), setLoadError); };
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (loadError && !u) return <LoadError error={loadError} onRetry={load} />;
   if (!u) return <p className="muted">{at('Loading…')}</p>;
   const patch = async (body, msg) => {
     if (!window.confirm(msg)) return;

@@ -6,7 +6,7 @@ import { api } from '../api/client.js';
 import { useApp } from '../state/AppState.jsx';
 import { useAsync } from '../lib.js';
 import Art from '../art/Art.jsx';
-import { Chapter, Loader } from '../components/Common.jsx';
+import { Chapter, Loader, LoadError } from '../components/Common.jsx';
 import { HiddenWonder } from '../components/Shell.jsx';
 import { useI18n } from '../i18n/index.jsx';
 
@@ -83,7 +83,7 @@ function Challenges() {
 function Hub() {
   const { user } = useApp();
   const { t } = useI18n();
-  const [state] = useAsync(() => api.get('/games'), [user?.id]);
+  const [state, , reload] = useAsync(() => api.get('/games'), [user?.id]);
   useEffect(() => { document.title = `${t('games.title')} · ${t('brand.name')}`; }, [t]);
   return (
     <div className="wrap fair">
@@ -94,7 +94,7 @@ function Hub() {
         <p>{t('games.intro')}</p>
       </header>
       <Challenges />
-      {state.loading ? <Loader /> : (
+      {state.loading ? <Loader /> : state.error ? <LoadError error={state.error} onRetry={reload} /> : (
         <div className="fair-grid">
           {state.data?.games.map((g, i) => {
             const used = g.playsPerDay != null && g.playsToday >= g.playsPerDay;

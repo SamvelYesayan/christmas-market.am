@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api/client.js';
 import { useApp } from '../state/AppState.jsx';
 import { money, storage } from '../lib.js';
-import { Empty, Loader } from '../components/Common.jsx';
+import { Empty, Loader, LoadError } from '../components/Common.jsx';
 import { CouponBox, Totals } from './Cart.jsx';
 import { useI18n } from '../i18n/index.jsx';
 
@@ -27,7 +27,7 @@ function submitForm(action, fields) {
 }
 
 export default function Checkout() {
-  const { cart, user, refreshCart, toast, rewardCelebration } = useApp();
+  const { cart, cartError, user, refreshCart, toast, rewardCelebration } = useApp();
   const { t } = useI18n();
   const nav = useNavigate();
   const [options, setOptions] = useState(null);
@@ -104,6 +104,7 @@ export default function Checkout() {
     }
   };
 
+  if (!cart.items.length && !busy && cartError) return <div className="wrap"><LoadError error={cartError} onRetry={() => refreshCart().catch(() => {})} /></div>;
   if (!cart.items.length && !busy) return <div className="wrap"><Empty art={{ type: 'sleigh', c1: '#c8102e' }} title={t('checkout.nothing')}><Link className="btn" to="/shop">{t('common.visitMarket')}</Link></Empty></div>;
   if (!options) return error ? <div className="wrap"><div className="form-error">{error.message}</div></div> : <Loader />;
 
@@ -116,7 +117,6 @@ export default function Checkout() {
             <button onClick={() => i <= step && setStep(i)} disabled={i > step}><span className="journey-dot">{i < step ? '✓' : i + 1}</span>{t(`checkout.${s}`)}</button>
           </li>
         ))}
-        <motion.span className="journey-sleigh" animate={{ left: `${(step / (STEPS.length - 1)) * 100}%` }} aria-hidden="true">🛷</motion.span>
       </ol>
       <div className="checkout-grid">
         <div className="panel pad">
@@ -190,6 +190,7 @@ export default function Checkout() {
               )}
             </motion.div>
           </AnimatePresence>
+          {quote && <p className="checkout-total-mobile"><span>{t('common.total')}</span><b>{money(quote.total)}</b></p>}
           <div className="row between checkout-nav">
             {step > 0 ? <button className="btn btn-ghost" onClick={() => setStep(step - 1)}>← {t('common.back')}</button> : <Link className="link" to="/cart">{t('checkout.backSleigh')}</Link>}
             {step < 3 ? <button className="btn" disabled={!valid[step]} onClick={() => setStep(step + 1)}>{t('common.continue')}</button>

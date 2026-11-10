@@ -43,8 +43,8 @@ r.post('/register', authLimiter, validate({ body: registerSchema }), ah(async (r
     await mergeGuestCart(db, req, res, u.id);
     return u.id;
   });
-  await createSession(res, req, userId);
-  res.status(201).json(await loadMe(userId));
+  const mobile = await createSession(res, req, userId);
+  res.status(201).json({ ...(await loadMe(userId)), ...(mobile ? { session: mobile } : {}) });
 }));
 
 const loginSchema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1).max(200) });
@@ -60,8 +60,8 @@ r.post('/login', authLimiter, validate({ body: loginSchema }), ah(async (req, re
   await withTransaction((db) => mergeGuestCart(db, req, res, user.id));
   await query('UPDATE users SET last_login_at = now() WHERE id=$1', [user.id]);
   await query('DELETE FROM sessions WHERE user_id=$1 AND expires_at < now()', [user.id]);
-  await createSession(res, req, user.id);
-  res.json(await loadMe(user.id));
+  const mobile = await createSession(res, req, user.id);
+  res.json({ ...(await loadMe(user.id)), ...(mobile ? { session: mobile } : {}) });
 }));
 
 r.post('/logout', ah(async (req, res) => {
@@ -82,8 +82,8 @@ r.post('/password', authLimiter, validate({ body: passwordSchema }), ah(async (r
   if (!(await bcrypt.compare(req.body.currentPassword, u.password_hash))) throw badRequest('Current password is incorrect.', 'wrong_password');
   await query('UPDATE users SET password_hash=$2, updated_at=now() WHERE id=$1', [req.user.id, await bcrypt.hash(req.body.newPassword, 12)]);
   await query('DELETE FROM sessions WHERE user_id=$1', [req.user.id]);
-  await createSession(res, req, req.user.id);
-  res.json({ ok: true });
+  const mobile = await createSession(res, req, req.user.id);
+  res.json({ ok: true, ...(mobile ? { session: mobile } : {}) });
 }));
 
 export default r;

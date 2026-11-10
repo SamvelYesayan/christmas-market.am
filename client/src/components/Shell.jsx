@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useApp } from '../state/AppState.jsx';
 import { api } from '../api/client.js';
+import { LoadError } from './Common.jsx';
 import { money } from '../lib.js';
 import { ProductVisual } from '../art/Art.jsx';
 import { Village } from '../art/Scenes.jsx';
@@ -29,7 +30,7 @@ export function Toasts() {
 }
 
 export function SleighDrawer() {
-  const { cart, setCart, cartOpen, setCartOpen, toast } = useApp();
+  const { cart, setCart, cartError, refreshCart, cartOpen, setCartOpen, toast } = useApp();
   const { t } = useI18n();
   const nav = useNavigate();
   useEffect(() => {
@@ -58,7 +59,7 @@ export function SleighDrawer() {
               </div>
               <button className="nav-ico" onClick={() => setCartOpen(false)} aria-label={t('common.close')}><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
             </header>
-            {cart.items.length === 0 ? (
+            {cart.items.length === 0 && cartError ? <LoadError error={cartError} onRetry={() => refreshCart().catch(() => {})} /> : cart.items.length === 0 ? (
               <div className="drawer-empty">
                 <svg viewBox="0 0 200 120" className="drawer-sleigh" aria-hidden="true">
                   <path d="M30 50 h100 q22 0 30 26 l4 18 h-124 q-12 0 -12 -16z" fill="#c8102e" />
@@ -110,7 +111,7 @@ export function FlyToSleigh() {
     const on = (e) => {
       if (document.documentElement.classList.contains('calm')) return;
       const from = e.detail?.from;
-      const target = document.querySelector('[data-sleigh]')?.getBoundingClientRect();
+      const target = [...document.querySelectorAll('[data-sleigh]')].find((el) => el.offsetParent !== null)?.getBoundingClientRect(); // the visible cart button (top bar or tab bar)
       if (!from || !target) return;
       const id = Math.random();
       setFlights((f) => [...f, { id, x: from.left + from.width / 2, y: from.top + from.height / 2, tx: target.left + target.width / 2, ty: target.top + target.height / 2 }]);

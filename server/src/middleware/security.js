@@ -2,6 +2,7 @@ import rateLimit from 'express-rate-limit';
 import { config, isProd } from '../config.js';
 import { forbidden } from '../lib/errors.js';
 import { tr } from '../i18n/index.js';
+import { isMobileClient } from './auth.js';
 
 export const allowedOrigins = config.APP_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -13,6 +14,9 @@ export const allowedOrigins = config.APP_ORIGIN.split(',').map((s) => s.trim()).
 export function originCheck(req, _res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (req.path.startsWith('/payments/') && req.path.endsWith('/callback')) return next();
+  // The native app sends no Origin (it is not a browser) and authenticates with a bearer token, not ambient cookies,
+  // so there is nothing for a cross-site request to ride on. A browser always sends Origin on these requests.
+  if (isMobileClient(req) && !req.get('origin') && !req.get('referer')) return next();
   const origin = req.get('origin') || (req.get('referer') ? new URL(req.get('referer')).origin : null);
   const self = `${req.protocol}://${req.get('host')}`;
   if (origin && (allowedOrigins.includes(origin) || origin === self)) return next();

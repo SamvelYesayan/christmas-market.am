@@ -7,7 +7,7 @@ import { useApp } from '../state/AppState.jsx';
 import { ATMOSPHERES, money, useAsync } from '../lib.js';
 import { Crest } from '../art/Scenes.jsx';
 import Art from '../art/Art.jsx';
-import { Empty, GiftTag, Loader, Ribbon } from '../components/Common.jsx';
+import { Empty, GiftTag, Loader, Ribbon, LoadError } from '../components/Common.jsx';
 import { payLabel, statusLabel } from './Order.jsx';
 import { LangSwitch, useI18n } from '../i18n/index.jsx';
 import { getIntroPref, setIntroPref } from '../effects/introPrefs.js';
@@ -27,13 +27,21 @@ function CouponTicket({ c }) {
 }
 
 function Overview({ dash }) {
-  const { user, persona } = useApp();
+  const { user, persona, cart } = useApp();
   const { t } = useI18n();
   const [recs] = useAsync(() => api.get('/me/recommendations'), []);
   const house = user.profile.house;
   const atmo = ATMOSPHERES[user.profile.atmosphere] ? user.profile.atmosphere : null;
   return (
     <div className="stack">
+      <nav className="account-quick" aria-label={t('account.tabs')}>
+        <Link to="/account/orders"><b>{t('account.orders')}</b><small>{dash.orders[0] ? `${dash.orders[0].number} · ${statusLabel(dash.orders[0].status)}` : t('account.noOrders')}</small></Link>
+        <Link to="/account/pioneer"><b>{t('pc.tab')}</b><small dir="auto">{user.pioneer ? user.pioneer.cardMasked : t('pc.connectShort')}</small></Link>
+        <Link to="/account/rewards"><b>{t('account.rewards')}</b><small>{dash.stardust} {t('common.stardust')}</small></Link>
+        <Link to="/cart"><b>{t('account.cart')}</b><small>{cart.count === 1 ? t('sleigh.aboardOne') : t('sleigh.aboard', { n: cart.count })}</small></Link>
+        <Link to="/account/wishlist"><b>{t('account.wishlist')}</b><small>{t('common.gifts', { n: dash.wishlistCount })}</small></Link>
+        <Link to="/account/settings"><b>{t('account.settings')}</b><small>{user.email}</small></Link>
+      </nav>
       <div className="cottage-tiles">
         <div className="tile tile-identity" style={{ '--h': house?.color ?? '#2a4fa8' }}>
           {house ? <Crest house={house} size={70} /> : <Art art={{ type: 'wand', c1: '#e8dcc4', c2: '#a9c7ff' }} />}
@@ -43,11 +51,8 @@ function Overview({ dash }) {
               : <><h3>{t('account.notSorted')}</h3><Link className="link" to="/academy">{t('account.visitAcademy')}</Link></>}
           </div>
         </div>
-        <div className="tile"><span className="eyebrow">{t('common.stardust')}</span><b className="tile-num">{dash.stardust} ✨</b><small className="muted">{t('account.earned')}</small></div>
-        <div className="tile"><span className="eyebrow">{t('pc.tab')}</span>{user.pioneer ? <><b className="tile-num" dir="ltr">{user.pioneer.cardMasked}</b><Link className="link" to="/account/pioneer">{t('pc.manage')}</Link></> : <><small className="muted">{t('pc.none')}</small><Link className="link" to="/account/pioneer">{t('pc.connectShort')}</Link></>}</div>
-        <div className="tile"><span className="eyebrow">{t('account.advent')}</span><b className="tile-num">{dash.advent.opened}/{dash.advent.total}</b><span className="bar"><span style={{ width: `${(dash.advent.opened / dash.advent.total) * 100}%` }} /></span></div>
+        <div className="tile"><span className="eyebrow">{t('account.advent')}</span><b className="tile-num">{dash.advent.opened}/{dash.advent.total}</b><span className="bar"><span style={{ width: `${(dash.advent.opened / dash.advent.total) * 100}%` }} /></span><Link className="link" to="/advent">{t('account.open')}</Link></div>
         <div className="tile"><span className="eyebrow">{t('account.atmosphere')}</span><b>{atmo ? t(`atmo.${atmo}`) : t('account.notChosen')}</b>{atmo && <small className="muted">{t(`atmo.${atmo}Blurb`)}</small>}</div>
-        <div className="tile"><span className="eyebrow">{t('account.wishlist')}</span><b className="tile-num">{dash.wishlistCount}</b><Link className="link" to="/account/wishlist">{t('account.open')}</Link></div>
       </div>
       {dash.coupons.length > 0 && (
         <section><h3>{t('account.codes')}</h3><div className="coupons">{dash.coupons.map((c) => <CouponTicket key={c.code} c={c} />)}</div></section>
@@ -82,8 +87,9 @@ function Orders({ dash }) {
 
 function Wishlist() {
   const { t } = useI18n();
-  const [state] = useAsync(() => api.get('/wishlist'), []);
+  const [state, , reload] = useAsync(() => api.get('/wishlist'), []);
   if (state.loading) return <Loader />;
+  if (state.error) return <LoadError error={state.error} onRetry={reload} />;
   if (!state.data.products.length) return <Empty art={{ type: 'heart', c1: '#c8102e' }} title={t('account.noWishes')}><p className="muted">{t('account.noWishesBody')}</p></Empty>;
   return <div className="tag-grid">{state.data.products.map((p, i) => <GiftTag key={p.slug} product={p} index={i} variant="mini" />)}</div>;
 }
@@ -210,11 +216,13 @@ function Settings() {
 }
 
 export default function Account() {
-  const { user, authReady, persona } = useApp();
+  const { user, authReady, authError, refreshUser, persona } = useApp();
   const { t } = useI18n();
-  const [state] = useAsync(() => (user ? api.get('/me/dashboard') : Promise.resolve(null)), [user?.id]);
+  const [state, , reload] = useAsync(() => (user ? api.get('/me/dashboard') : Promise.resolve(null)), [user?.id]);
   useEffect(() => { document.title = `${t('account.title')} · ${t('brand.name')}`; }, [t]);
   if (!authReady) return <Loader />;
+  // Could not ask the server who this is: say so, rather than sending a signed-in customer to the login page.
+  if (!user && authError) return <div className="wrap"><LoadError error={authError} onRetry={() => refreshUser().catch(() => {})} /></div>;
   if (!user) return <Navigate to="/login?next=/account" replace />;
   const tabs = [['', 'account.overview'], ['orders', 'account.orders'], ['pioneer', 'pc.tab'], ['wishlist', 'account.wishlist'], ['rewards', 'account.rewards'], ['settings', 'account.settings']];
   return (
@@ -228,7 +236,7 @@ export default function Account() {
       <nav className="cottage-tabs" aria-label={t('account.tabs')}>
         {tabs.map(([to, l]) => <NavLink key={to} end to={`/account${to ? `/${to}` : ''}`} className="cottage-tab">{t(l)}</NavLink>)}
       </nav>
-      {!state.data ? <Loader /> : (
+      {state.error ? <LoadError error={state.error} onRetry={reload} /> : !state.data ? <Loader /> : (
         <Routes>
           <Route index element={<Overview dash={state.data} />} />
           <Route path="orders" element={<Orders dash={state.data} />} />

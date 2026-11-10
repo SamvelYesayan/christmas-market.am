@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { api, qs } from '../api/client.js';
 import { useAsync } from '../lib.js';
 import Art from '../art/Art.jsx';
-import { Empty, GiftTag, Loader } from '../components/Common.jsx';
+import { Empty, GiftTag, Loader, LoadError } from '../components/Common.jsx';
 import { HiddenWonder } from '../components/Shell.jsx';
 import { useI18n } from '../i18n/index.jsx';
 
@@ -16,6 +16,8 @@ export default function Shop() {
   const { t } = useI18n();
   const [cats] = useAsync(() => api.get('/categories'), []);
   const [page, setPage] = useState(1);
+  const [showFilters, setShowFilters] = useState(false);
+  const [search, setSearch] = useState(params.get('q') ?? '');
   const [items, setItems] = useState([]);
   const filters = {
     q: params.get('q') ?? '',
@@ -28,11 +30,12 @@ export default function Shop() {
   const [min, max] = filters.price.split('-');
   const key = JSON.stringify([category, filters]);
 
-  const [state] = useAsync(
+  const [state, , reloadProducts] = useAsync(
     () => api.get(`/products${qs({ category, q: filters.q, sort: filters.sort, min, max, onSale: filters.onSale, magic: filters.magic, limited: filters.limited, page, limit: 24 })}`),
     [key, page],
   );
   useEffect(() => { setPage(1); setItems([]); }, [key]);
+  useEffect(() => { setSearch(filters.q); }, [filters.q]);
   useEffect(() => {
     if (state.data) setItems((prev) => (page === 1 ? state.data.products : [...prev, ...state.data.products]));
   }, [state.data, page]);
@@ -43,6 +46,7 @@ export default function Shop() {
     else next.delete(k);
     setParams(next, { replace: true });
   };
+  const activeFilters = [filters.price, filters.onSale, filters.magic, filters.limited].filter(Boolean).length;
   const current = cats.data?.categories.find((c) => c.slug === category);
   useEffect(() => { document.title = `${current?.name ?? t('shop.title')} · ${t('brand.name')}`; }, [current, t]);
 
@@ -71,6 +75,10 @@ export default function Shop() {
 
       <div className="wrap">
         <div className="filters" role="group" aria-label={t('shop.filters')}>
+          <form className="shop-search" role="search" onSubmit={(e) => { e.preventDefault(); set('q', search.trim()); }}>
+            <input className="input" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('shop.searchPh')} aria-label={t('nav.searchLabel')} />
+            <button className="btn btn-sm">{t('common.search')}</button>
+          </form>
           <label className="filter-sort">
             <span className="label">{t('shop.sort')}</span>
             <select className="input" value={filters.sort} onChange={(e) => set('sort', e.target.value)}>
@@ -81,6 +89,8 @@ export default function Shop() {
               <option value="name">{t('shop.name')}</option>
             </select>
           </label>
+          <button type="button" className={`chip filters-toggle ${activeFilters ? 'on' : ''}`} aria-expanded={showFilters} onClick={() => setShowFilters((v) => !v)}>{t('shop.moreFilters')}{activeFilters ? ` (${activeFilters})` : ''}</button>
+          <div className={`filters-extra ${showFilters ? 'open' : ''}`}>
           <div className="row">
             {PRICE_BANDS.map(([v, l]) => <button key={l} className={`chip ${filters.price === v ? 'on' : ''}`} onClick={() => set('price', v)}>{t(`shop.${l}`)}</button>)}
           </div>
@@ -90,10 +100,11 @@ export default function Shop() {
             <button className={`chip ${filters.limited ? 'on' : ''}`} onClick={() => set('limited', filters.limited ? '' : 'true')}>{t('shop.limited')}</button>
             {filters.q && <button className="chip" onClick={() => set('q', '')}>{t('shop.clear')}</button>}
           </div>
+          </div>
         </div>
 
-        {state.error && <div className="form-error">{state.error.message}</div>}
-        {state.loading && page === 1 ? <Loader label={t('shop.arranging')} /> : items.length === 0 ? (
+        {state.error && items.length > 0 && <div className="form-error">{state.error.message}</div>}
+        {state.error && items.length === 0 ? <LoadError error={state.error} onRetry={reloadProducts} /> : state.loading && page === 1 ? <Loader label={t('shop.arranging')} /> : items.length === 0 ? (
           <Empty title={t('shop.empty')}>
             <p className="muted">{t('shop.emptyBody')}</p>
             <Link className="btn" to="/gift-finder">{t('shop.ask')}</Link>
@@ -101,7 +112,7 @@ export default function Shop() {
         ) : (
           <>
             <p className="muted result-count">{t('shop.found', { n: state.data?.total ?? items.length })}</p>
-            <div className="tag-grid">{items.map((p, i) => <GiftTag key={p.slug} product={p} index={i} variant={i % 7 === 0 ? 'window' : 'tag'} />)}</div>
+            <div className="tag-grid">{items.map((p, i) => <GiftTag key={p.slug} product={p} index={i} />)}</div>
             {state.data && page < state.data.pages && (
               <div className="center" style={{ marginTop: '2.5rem' }}>
                 <button className="btn btn-ghost" onClick={() => setPage(page + 1)} disabled={state.loading}>{state.loading ? t('shop.bringing') : t('shop.more')}</button>

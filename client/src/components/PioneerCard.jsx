@@ -260,6 +260,7 @@ function Dashboard({ s, reload, refresh, refreshing }) {
         </div>
       </div>
       {s.partialError && <p className="muted small">{s.partialError}</p>}
+      <p><Link className="btn btn-ghost btn-sm" to="/pioneer">{t('pc.spendGifts')} →</Link></p>
 
       {s.live && (
         <section className="pc-section">

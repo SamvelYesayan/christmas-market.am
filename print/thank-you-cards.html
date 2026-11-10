@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="hy">
+<head>
+<meta charset="utf-8">
+<title>Շնորհակալական քարտեր · Christmas Market</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pinyon+Script&family=Noto+Serif+Armenian:wght@400;500;600;700&family=Noto+Sans+Armenian:wght@600;700&display=swap">
+<style>
+  /* A4 = 210 x 297 mm. 6 mm margin + 2 x 99 mm + 5 x 57 mm fills it exactly. */
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  .sheet { position: relative; width: 210mm; height: 297mm; overflow: hidden; }
+  .grid { position: absolute; left: 6mm; top: 6mm; display: grid; grid-template-columns: repeat(2, 99mm); grid-template-rows: repeat(5, 57mm); }
+  .grid svg { display: block; width: 99mm; height: 57mm; }
+  .guides { position: absolute; inset: 0; width: 210mm; height: 297mm; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="grid" id="grid"></div>
+  <svg class="guides" id="guides" viewBox="0 0 210 297"></svg>
+</div>
+<script>
+const COPY = {
+  brand: 'Christmas Market',
+  title: 'Շնորհակալություն',
+  subtitle: 'գնման համար',
+  wish1: 'Թող ձեր տունը լցվի ջերմությամբ,',
+  wish2: 'լույսով և ամանորյա հրաշքներով',
+  greeting: 'Շնորհավոր Ամանոր և Սուրբ Ծնունդ',
+  site: 'www.christmas-market.am',
+};
+
+// Seeded so every regeneration gives the identical card.
+let seed = 20261225;
+const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+
+const sparkle = (x, y, r, fill = '#ffe2a8') =>
+  `<path fill="${fill}" d="M${x} ${y - r}Q${x + r * .12} ${y - r * .12} ${x + r} ${y}Q${x + r * .12} ${y + r * .12} ${x} ${y + r}Q${x - r * .12} ${y + r * .12} ${x - r} ${y}Q${x - r * .12} ${y - r * .12} ${x} ${y - r}Z"/>`;
+
+const star5 = (x, y, r, fill = 'url(#gold)') => {
+  let d = '';
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r * .44 : r;
+    d += `${i ? 'L' : 'M'}${(x + q * Math.cos(a)).toFixed(1)} ${(y + q * Math.sin(a)).toFixed(1)}`;
+  }
+  return `<path fill="${fill}" d="${d}Z"/>`;
+};
+
+const flake = (x, y, r, op) => {
+  let s = `<g stroke="#dfe8ff" stroke-width="1.5" stroke-linecap="round" opacity="${op}">`;
+  for (let i = 0; i < 3; i++) {
+    const a = i * Math.PI / 3, c = Math.cos(a) * r, n = Math.sin(a) * r;
+    s += `<line x1="${(x - c).toFixed(1)}" y1="${(y - n).toFixed(1)}" x2="${(x + c).toFixed(1)}" y2="${(y + n).toFixed(1)}"/>`;
+  }
+  return s + '</g>';
+};
+
+function bauble(x, y, r, grad, stringFrom = 0) {
+  const zig = [];
+  const n = 8, top = y - r * .17, bot = y + r * .17, step = 2 * r / n;
+  for (let i = 0; i <= n; i++) zig.push(`${i ? 'L' : 'M'}${(x - r + i * step).toFixed(1)} ${i % 2 ? top : bot}`);
+  return `
+    <line x1="${x}" y1="${stringFrom}" x2="${x}" y2="${y - r - 9}" stroke="#f2c46d" stroke-width="1.4"/>
+    <circle cx="${x}" cy="${y - r - 12}" r="4" fill="none" stroke="#f2c46d" stroke-width="1.6"/>
+    <rect x="${x - r * .24}" y="${y - r - 9}" width="${r * .48}" height="12" rx="2.5" fill="url(#gold)"/>
+    <circle cx="${x}" cy="${y}" r="${r}" fill="url(#${grad})"/>
+    <path d="${zig.join('')}" fill="none" stroke="#ffe2a8" stroke-width="2.2" stroke-linejoin="round" opacity=".9"/>
+    <path d="M${x - r * .94} ${y - r * .3}Q${x} ${y - r * .1} ${x + r * .94} ${y - r * .3}" fill="none" stroke="#ffe2a8" stroke-width="1.2" opacity=".75"/>
+    <path d="M${x - r * .94} ${y + r * .3}Q${x} ${y + r * .1} ${x + r * .94} ${y + r * .3}" fill="none" stroke="#ffe2a8" stroke-width="1.2" opacity=".75"/>
+    <ellipse cx="${x - r * .36}" cy="${y - r * .5}" rx="${r * .2}" ry="${r * .12}" fill="#fff" opacity=".6" transform="rotate(-32 ${x - r * .36} ${y - r * .5})"/>`;
+}
+
+function tree(x, base, h, withStar) {
+  const w = h * .33, trunk = h * .07;
+  const tiers = [[0, .46, .6], [.24, .73, .82], [.5, 1, 1]];
+  let s = `<rect x="${x - trunk / 2}" y="${base - 4}" width="${trunk}" height="${h * .1}" fill="#3b2415"/>`;
+  const top = base - h;
+  for (const [a, b, wf] of tiers) {
+    const y1 = top + a * h, y2 = base + (b - 1) * h, hw = w * wf, m = y1 + (y2 - y1) * .62;
+    s += `<path fill="url(#fir)" d="M${x} ${y1}Q${x + hw * .34} ${m} ${x + hw} ${y2}Q${x} ${y2 + h * .07} ${x - hw} ${y2}Q${x - hw * .34} ${m} ${x} ${y1}Z"/>`;
+    const y3 = y1 + (y2 - y1) * .42, hs = hw * .47;
+    s += `<path fill="#f6f8ff" d="M${x} ${y1}Q${x + hs * .4} ${(y1 + y3) / 2} ${x + hs} ${y3}Q${x + hs * .55} ${y3 + h * .035} ${x + hs * .3} ${y3 - h * .005}Q${x} ${y3 + h * .05} ${x - hs * .3} ${y3 - h * .005}Q${x - hs * .55} ${y3 + h * .035} ${x - hs} ${y3}Q${x - hs * .4} ${(y1 + y3) / 2} ${x} ${y1}Z"/>`;
+  }
+  const lights = [[-.3, .42], [.26, .5], [-.5, .66], [.08, .68], [.56, .74], [-.3, .86], [.3, .9], [-.72, .93], [.76, .95]];
+  lights.forEach(([fx, fy], i) => {
+    const cx = x + fx * w, cy = top + fy * h;
+    s += `<circle cx="${cx}" cy="${cy}" r="${h * .036}" fill="#ffe2a8" opacity=".3"/><circle cx="${cx}" cy="${cy}" r="${h * .016}" fill="${i % 3 === 1 ? '#ff6b7f' : '#ffe2a8'}"/>`;
+  });
+  if (withStar) s += star5(x, top - 3, h * .085);
+  return s;
+}
+
+function gift(x, base, w, h, box, ribbon) {
+  const y = base - h, b = w * .17;
+  return `
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2.5" fill="${box}"/>
+    <rect x="${x - 3}" y="${y - 3}" width="${w + 6}" height="${h * .26}" rx="2.5" fill="${box}"/>
+    <rect x="${x - 3}" y="${y - 3 + h * .26 - 2}" width="${w + 6}" height="2.5" fill="#000" opacity=".16"/>
+    <rect x="${x + w / 2 - b / 2}" y="${y - 3}" width="${b}" height="${h + 3}" fill="${ribbon}"/>
+    <path fill="${ribbon}" d="M${x + w / 2} ${y - 3}C${x + w * .08} ${y - h * .5} ${x + w * .02} ${y - 1} ${x + w / 2} ${y - 3}Z"/>
+    <path fill="${ribbon}" d="M${x + w / 2} ${y - 3}C${x + w * .92} ${y - h * .5} ${x + w * .98} ${y - 1} ${x + w / 2} ${y - 3}Z"/>
+    <circle cx="${x + w / 2}" cy="${y - 4}" r="${w * .07}" fill="${ribbon}"/>`;
+}
+
+// Night-sky specks, kept out of the text block and off the snow.
+let sky = '';
+for (let i = 0; i < 130; i++) {
+  const x = rnd() * 990, y = rnd() * 450;
+  if (x > 180 && x < 810 && y > 40 && y < 440) continue;
+  sky += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.9 + rnd() * 2.3).toFixed(1)}" fill="#fff" opacity="${(.25 + rnd() * .55).toFixed(2)}"/>`;
+}
+for (let i = 0; i < 26; i++) {
+  const x = 215 + rnd() * 560, y = 15 + rnd() * 400;
+  sky += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.7 + rnd() * 1).toFixed(1)}" fill="#fff" opacity="${(.14 + rnd() * .22).toFixed(2)}"/>`;
+}
+
+const card = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 990 570" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#060b1d"/><stop offset=".55" stop-color="#0e1a44"/><stop offset="1" stop-color="#1d3173"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#f2c46d" stop-opacity=".26"/><stop offset=".55" stop-color="#f2c46d" stop-opacity=".08"/><stop offset="1" stop-color="#f2c46d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe9bd"/><stop offset=".5" stop-color="#f2c46d"/><stop offset="1" stop-color="#c7922e"/>
+    </linearGradient>
+    <linearGradient id="goldText" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff0cc"/><stop offset=".6" stop-color="#f6cf80"/><stop offset="1" stop-color="#dba544"/>
+    </linearGradient>
+    <linearGradient id="fir" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f9a72"/><stop offset="1" stop-color="#0a4a37"/>
+    </linearGradient>
+    <linearGradient id="snowBack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c9daff"/><stop offset="1" stop-color="#8fabea"/>
+    </linearGradient>
+    <linearGradient id="snowFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dbe6ff"/>
+    </linearGradient>
+    <radialGradient id="bRed" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#ff5a6f"/><stop offset=".55" stop-color="#c8102e"/><stop offset="1" stop-color="#6e0618"/></radialGradient>
+    <radialGradient id="bGold" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#ffeec9"/><stop offset=".55" stop-color="#e3ad4d"/><stop offset="1" stop-color="#8a5f12"/></radialGradient>
+    <radialGradient id="bGreen" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#3fd0a2"/><stop offset=".55" stop-color="#0f6b4f"/><stop offset="1" stop-color="#053326"/></radialGradient>
+  </defs>
+
+  <rect width="990" height="570" fill="url(#sky)"/>
+  <ellipse cx="495" cy="205" rx="400" ry="230" fill="url(#glow)"/>
+  ${sky}
+  ${flake(232, 215, 11, .55)}${flake(760, 240, 12, .55)}${flake(205, 300, 8, .4)}${flake(792, 138, 8, .45)}${flake(262, 86, 7, .4)}${flake(735, 345, 7, .4)}
+  ${sparkle(150, 215, 11)}${sparkle(847, 222, 11)}${sparkle(30, 240, 8)}${sparkle(968, 245, 8)}
+
+  <!-- hanging baubles -->
+  ${bauble(66, 112, 44, 'bRed')}
+  ${bauble(160, 66, 28, 'bGold')}
+  ${bauble(924, 112, 44, 'bGreen')}
+  ${bauble(830, 66, 28, 'bRed')}
+
+  <!-- snow, trees, gifts -->
+  <path fill="url(#snowBack)" d="M0 414C150 368 310 462 495 468C680 462 840 368 990 414V570H0Z"/>
+  ${tree(46, 488, 142, false)}
+  ${tree(944, 488, 142, false)}
+  ${tree(126, 496, 204, true)}
+  ${tree(864, 496, 204, true)}
+  ${tree(205, 500, 112, false)}
+  <path fill="url(#snowFront)" d="M0 474C170 444 330 498 495 502C660 498 820 444 990 474V570H0Z"/>
+  ${gift(752, 487, 44, 38, '#c8102e', '#f2c46d')}
+  ${gift(793, 489, 30, 25, '#0f6b4f', '#ffe2a8')}
+
+  <!-- text -->
+  <g text-anchor="middle">
+    <text x="495" y="74" font-family="'Pinyon Script', cursive" font-size="50" fill="url(#goldText)">${COPY.brand}</text>
+    <text x="495" y="165" font-family="'Noto Serif Armenian', serif" font-weight="600" font-size="67" fill="#fff8e8">${COPY.title}</text>
+    <text x="495" y="222" font-family="'Noto Serif Armenian', serif" font-weight="500" font-size="38" letter-spacing="2" fill="url(#goldText)">${COPY.subtitle}</text>
+    <g>
+      <line x1="372" y1="254" x2="470" y2="254" stroke="#f2c46d" stroke-width="1.5" opacity=".75"/>
+      <line x1="520" y1="254" x2="618" y2="254" stroke="#f2c46d" stroke-width="1.5" opacity=".75"/>
+      ${star5(495, 254, 15)}
+    </g>
+    <text x="495" y="302" font-family="'Noto Serif Armenian', serif" font-size="27" fill="#eef2ff">${COPY.wish1}</text>
+    <text x="495" y="338" font-family="'Noto Serif Armenian', serif" font-size="27" fill="#eef2ff">${COPY.wish2}</text>
+    <text x="495" y="400" font-family="'Noto Serif Armenian', serif" font-weight="600" font-size="27" fill="url(#goldText)">${COPY.greeting}</text>
+    <text x="495" y="548" font-family="'Noto Sans Armenian', 'Segoe UI', Arial, sans-serif" font-weight="700" font-size="37" letter-spacing=".6" fill="#a50d26">${COPY.site}</text>
+  </g>
+</svg>`;
+
+document.getElementById('grid').innerHTML = card.repeat(10);
+
+// Cut guides: faint lines on the card borders, ticks in the white margin.
+const M = 6, W = 99, H = 57;
+let g = '';
+const tick = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#8a8f9c" stroke-width=".12"/>`;
+for (let c = 0; c <= 2; c++) { const x = M + c * W; g += tick(x, 1.8, x, 5.2) + tick(x, 291.8, x, 295.2); }
+for (let r = 0; r <= 5; r++) { const y = M + r * H; g += tick(1.8, y, 5.2, y) + tick(204.8, y, 208.2, y); }
+g += `<line x1="${M + W}" y1="${M}" x2="${M + W}" y2="${M + 5 * H}" stroke="#fff" stroke-width=".08" opacity=".55"/>`;
+for (let r = 1; r < 5; r++) g += `<line x1="${M}" y1="${M + r * H}" x2="${M + 2 * W}" y2="${M + r * H}" stroke="#fff" stroke-width=".08" opacity=".55"/>`;
+document.getElementById('guides').innerHTML = g;
+</script>
+</body>
+</html>

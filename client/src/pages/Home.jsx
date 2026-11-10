@@ -1,13 +1,14 @@
-// Home — shop first (categories, popular gifts, offers), then one calm row of extras.
+// Home — one clear hero, then categories, popular gifts, offers, Pioneer Card, how shopping works; extras come last.
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { api } from '../api/client.js';
 import { useApp } from '../state/AppState.jsx';
-import { ATMOSPHERES, deviceQuality, money, timeGreeting, useAsync, useMediaQuery } from '../lib.js';
+import { deviceQuality, money, timeGreeting, useAsync, useMediaQuery } from '../lib.js';
 import Art, { ProductVisual } from '../art/Art.jsx';
 import { Mountains, Pines, Village } from '../art/Scenes.jsx';
-import { Chapter, GiftTag, Loader, Reveal, Ribbon } from '../components/Common.jsx';
+import { Chapter, GiftTag, Loader, Reveal, LoadError } from '../components/Common.jsx';
+import { CardVisual } from '../components/PioneerCard.jsx';
 import { HiddenWonder } from '../components/Shell.jsx';
 import { useI18n } from '../i18n/index.jsx';
 import WishesWall from '../components/WishesWall.jsx';
@@ -16,78 +17,59 @@ const Ornament3D = lazy(() => import('../effects/Ornament3D.jsx'));
 
 function Hero({ blocks }) {
   const { persona, calm } = useApp();
-  const { t, article, lang } = useI18n();
-  const ref = useRef(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
-  const yFar = useTransform(scrollYProgress, [0, 1], ['0%', '18%']);
-  const yMid = useTransform(scrollYProgress, [0, 1], ['0%', '32%']);
-  const yNear = useTransform(scrollYProgress, [0, 1], ['0%', '55%']);
-  const yText = useTransform(scrollYProgress, [0, 1], ['0%', '-30%']);
-  const fade = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
+  const { t } = useI18n();
   const big = useMediaQuery('(min-width: 900px)');
   const can3d = big && !calm && deviceQuality() > 0.5;
   const hero = blocks?.['home.hero'] ?? {};
   const name = persona?.name && persona.name !== 'Traveller' ? persona.name : null;
-  const atmoName = t(`atmo.${ATMOSPHERES[persona?.atmosphere] ? persona.atmosphere : 'enchanted'}`);
-  const words = (hero.title ?? '').split(' ');
-
+  const ornament = <div className="hero-ornament-fallback"><Art art={{ type: 'ornament', c1: '#c8102e', c2: '#f2c46d' }} glow={false} /></div>;
   return (
-    <section className="hero" ref={ref}>
-      <motion.div className="hero-layer hero-moon" style={{ y: yFar }} aria-hidden="true" />
-      <motion.div className="hero-layer hero-far" style={{ y: yFar }}><Mountains /></motion.div>
-      <motion.div className="hero-layer hero-mid" style={{ y: yMid }}><Village /></motion.div>
-      <motion.div className="hero-layer hero-near" style={{ y: yNear }}><Pines count={11} /></motion.div>
+    <section className="hero">
+      <div className="hero-layer hero-moon" aria-hidden="true" />
+      <div className="hero-layer hero-far"><Mountains /></div>
+      <div className="hero-layer hero-mid"><Village /></div>
+      <div className="hero-layer hero-near"><Pines count={11} /></div>
       <div className="hero-ground" aria-hidden="true" />
-      <motion.div className="hero-content wrap" style={{ y: yText, opacity: fade }}>
-        <motion.p className="hero-greeting" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          {name ? <>{t(`greet.${timeGreeting()}`)}, <span className="script">{name}</span>. {persona?.atmosphere && <span className="muted">{t('home.glows', { a: article(atmoName), atmo: lang === 'en' ? atmoName.toLowerCase() : atmoName })}</span>}</> : hero.eyebrow}
-        </motion.p>
-        <h1 className="hero-title" aria-label={hero.title}>
-          {words.map((w, i) => (
-            <motion.span key={i} className={i === words.length - 1 ? 'hero-last' : ''} initial={{ opacity: 0, y: 60, rotateX: -60 }} animate={{ opacity: 1, y: 0, rotateX: 0 }} transition={{ delay: 0.45 + i * 0.09, duration: 1, ease: [0.22, 1, 0.36, 1] }}>
-              {w}{' '}
-            </motion.span>
-          ))}
-        </h1>
-        <motion.p className="hero-sub" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }}>{hero.subtitle}</motion.p>
-        <motion.div className="row hero-ctas" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.3 }}>
-          <Link className="btn" to="/shop">{hero.cta}</Link>
-          <Link className="btn btn-ghost" to="/gift-finder">{t('home.ctaFinder')}</Link>
-        </motion.div>
+      <motion.div className="hero-content wrap" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
+        <p className="hero-greeting">{name ? <>{t(`greet.${timeGreeting()}`)}, <span className="script">{name}</span></> : t('home.heroPurpose')}</p>
+        <h1 className="hero-title">{hero.title}</h1>
+        <p className="hero-sub">{name ? t('home.heroPurpose') : hero.subtitle}</p>
+        <div className="row hero-ctas">
+          <Link className="btn" to="/shop">{t('home.heroCta')}</Link>
+          <Link className="link hero-finder" to="/gift-finder">{t('home.ctaFinder')} →</Link>
+        </div>
       </motion.div>
       <div className="hero-ornament" aria-hidden="true">
         {can3d ? (
-          <Suspense fallback={<div className="hero-ornament-fallback"><Art art={{ type: 'ornament', c1: '#c8102e', c2: '#f2c46d' }} glow={false} /></div>}>
+          <Suspense fallback={ornament}>
             <Ornament3D c1={persona?.atmosphere === 'nordic' ? '#1d6b6b' : persona?.atmosphere === 'enchanted' ? '#2a4fa8' : '#c8102e'} c2="#0b1430" />
           </Suspense>
-        ) : (
-          <div className="hero-ornament-fallback"><Art art={{ type: 'ornament', c1: '#c8102e', c2: '#f2c46d' }} glow={false} /></div>
-        )}
+        ) : ornament}
       </div>
       <HiddenWonder id="golden-acorn" style={{ left: '8%', bottom: '14%' }} />
-      <div className="hero-scroll" aria-hidden="true"><span /></div>
     </section>
   );
 }
 
-function Stalls({ categories, title, body }) {
+// The first eight categories; the rest are one tap away in the shop and the menu.
+function Categories({ categories }) {
   const { t } = useI18n();
   return (
-    <section className="section stalls-section">
-      <div className="wrap"><Chapter title={title ?? t('home.stallsTitle')}>{body ?? t('home.stallsBody')}</Chapter></div>
-      <div className="stalls-row" role="list">
-        {categories.map((c, i) => (
-          <motion.div role="listitem" key={c.slug} initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: (i % 6) * 0.06 }}>
-            <Link to={`/shop/${c.slug}`} className="stall" style={{ '--c': c.color }}>
-              <span className="stall-awning" aria-hidden="true" />
-              <span className="stall-lamp" aria-hidden="true" />
-              <span className="stall-art"><Art art={{ type: c.art, c1: c.color, c2: c.color === '#f2c46d' ? '#c8102e' : '#f2c46d' }} /></span>
-              <span className="stall-name">{c.name}</span>
-              <span className="stall-tag">{c.tagline}</span>
-              <span className="stall-count">{t('home.giftsCount', { n: c.productCount })}</span>
+    <section className="section">
+      <div className="wrap">
+        <div className="row between home-head">
+          <Chapter title={t('home.stallsTitle')}>{t('home.stallsBody')}</Chapter>
+          <Link className="btn btn-ghost btn-sm" to="/shop">{t('home.allCats')}</Link>
+        </div>
+        <div className="cat-grid">
+          {categories.slice(0, 8).map((c) => (
+            <Link key={c.slug} to={`/shop/${c.slug}`} className="cat-tile">
+              <span className="cat-art"><Art art={{ type: c.art, c1: c.color, c2: c.color === '#f2c46d' ? '#c8102e' : '#f2c46d' }} glow={false} /></span>
+              <b>{c.name}</b>
+              <small className="muted">{t('home.giftsCount', { n: c.productCount })}</small>
             </Link>
-          </motion.div>
-        ))}
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -98,48 +80,84 @@ function PopularGifts({ products, limited }) {
   if (!products.length) return null;
   return (
     <section className="section">
-      <div className="wrap row between home-head">
-        <Chapter title={t('home.wishedTitle')}>{t('home.wishedBody')}</Chapter>
-        <Link className="btn btn-ghost btn-sm" to="/shop">{t('home.seeAllGifts')}</Link>
-      </div>
-      <Ribbon>{products.map((p, i) => <GiftTag key={p.slug} product={p} index={i} />)}</Ribbon>
-      {limited.length > 0 && (
-        <div className="wrap limited-strip">
-          {limited.map((p) => (
-            <Link key={p.slug} to={`/product/${p.slug}`} className="limited-item">
-              <span className="limited-art"><ProductVisual product={p} /></span>
-              <span><span className="badge badge-gold">{t('home.limitedLeft', { n: p.stock })}</span><b>{p.name}</b><small className="muted">{money(p.salePrice ?? p.price)}</small></span>
-            </Link>
-          ))}
+      <div className="wrap">
+        <div className="row between home-head">
+          <Chapter title={t('home.wishedTitle')}>{t('home.wishedBody')}</Chapter>
+          <Link className="btn btn-ghost btn-sm" to="/shop">{t('home.seeAllGifts')}</Link>
         </div>
-      )}
+        <div className="tag-grid">{products.map((p, i) => <GiftTag key={p.slug} product={p} index={i} />)}</div>
+        {limited.length > 0 && (
+          <div className="limited-strip">
+            {limited.map((p) => (
+              <Link key={p.slug} to={`/product/${p.slug}`} className="limited-item">
+                <span className="limited-art"><ProductVisual product={p} /></span>
+                <span><span className="badge badge-gold">{t('home.limitedLeft', { n: p.stock })}</span><b>{p.name}</b><small className="muted">{money(p.salePrice ?? p.price)}</small></span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
 
-// One calm row for everything beyond shopping, instead of a full chapter per feature.
-function MoreMagic() {
+/** What the Pioneer Card gives, and the one step to get it. */
+function PioneerBand() {
   const { user, pioneerStatus } = useApp();
   const { t } = useI18n();
+  const p = pioneerStatus?.discountPercent ?? 5;
+  const linked = !!user?.pioneer;
+  return (
+    <section className="section">
+      <div className="wrap">
+        <div className="pioneer-band panel">
+          <CardVisual masked={linked ? user.pioneer.cardMasked : null} holder={linked ? user.pioneer.holderName : null} empty={!linked} tilt={false} />
+          <div className="stack">
+            <h2>{t('home.pioneerTitle')}</h2>
+            <p className="muted">{t('home.pioneerBody')}</p>
+            <ul className="pc-benefits"><li>{t('pc.benefit1', { p })}</li><li>{t('pc.benefit2')}</li><li>{t('pc.benefit3')}</li></ul>
+            <div><Link className="btn" to={linked ? '/account/pioneer' : '/pioneer'}>{linked ? t('pc.goToCard') : t('pc.connect')}</Link></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HowItWorks() {
+  const { t } = useI18n();
+  return (
+    <section className="section">
+      <div className="wrap">
+        <Chapter title={t('home.howTitle')} />
+        <ol className="how-steps">
+          {[1, 2, 3].map((n) => <li key={n}><span className="how-num">{n}</span><b>{t(`home.how${n}t`)}</b><span className="muted">{t(`home.how${n}b`)}</span></li>)}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+// The seasonal extras, in one calm row.
+function MoreMagic() {
+  const { t } = useI18n();
   const tiles = [
+    { to: '/advent', art: { type: 'door', c1: '#0f6b4f', c2: '#f2c46d' }, title: t('nav.advent'), body: t('nav.adventHint') },
     { to: '/gift-finder', art: { type: 'giftbox', c1: '#f2c46d', c2: '#c8102e' }, title: t('nav.finder'), body: t('home.moreFinder') },
-    { to: '/pioneer', art: { type: 'card', c1: '#f2c46d', c2: '#3a2a0e' }, title: t('nav.pioneer'), body: user?.pioneer ? t('home.morePioneerOn', { card: user.pioneer.cardMasked }) : t('home.morePioneer', { p: pioneerStatus?.discountPercent ?? 5 }) },
-    { to: '/advent', art: { type: 'door', c1: '#0f6b4f', c2: '#f2c46d' }, title: t('nav.advent'), body: t('home.moreAdvent') },
     { to: '/games', art: { type: 'star', c1: '#2a4fa8', c2: '#f2c46d' }, title: t('home.moreFunTitle'), body: t('home.moreFun') },
+    { to: '/academy', art: { type: 'wand', c1: '#e8dcc4', c2: '#a9c7ff' }, title: t('nav.academy'), body: t('home.moreAcademy') },
   ];
   return (
     <section className="section">
       <div className="wrap">
         <Chapter title={t('home.moreTitle')} />
         <div className="more-magic">
-          {tiles.map((x, i) => (
-            <Reveal key={x.to} delay={i * 0.06}>
-              <Link to={x.to} className="more-tile">
-                <span className="more-art"><Art art={x.art} /></span>
-                <span><b>{x.title}</b><small className="muted">{x.body}</small></span>
-                <span className="more-go" aria-hidden="true">→</span>
-              </Link>
-            </Reveal>
+          {tiles.map((x) => (
+            <Link key={x.to} to={x.to} className="more-tile">
+              <span className="more-art"><Art art={x.art} glow={false} /></span>
+              <span><b>{x.title}</b><small className="muted">{x.body}</small></span>
+              <span className="more-go" aria-hidden="true">→</span>
+            </Link>
           ))}
         </div>
       </div>
@@ -153,7 +171,10 @@ function Offers({ campaigns, onSale }) {
   return (
     <section className="section">
       <div className="wrap">
-        <Chapter title={t('home.sealedTitle')}>{t('home.sealedBody')}</Chapter>
+        <div className="row between home-head">
+          <Chapter title={t('home.sealedTitle')}>{t('home.sealedBody')}</Chapter>
+          <Link className="btn btn-ghost btn-sm" to="/shop?onSale=true">{t('home.seeOffers')}</Link>
+        </div>
         <div className="letters">
           {campaigns.map((c, i) => (
             <Reveal key={c.id} delay={i * 0.1} className="letter" >
@@ -167,7 +188,7 @@ function Offers({ campaigns, onSale }) {
             </Reveal>
           ))}
         </div>
-        {onSale.length > 0 && <div className="tag-grid sale-grid">{onSale.slice(0, 4).map((p, i) => <GiftTag key={p.slug} product={p} index={i} variant="mini" />)}</div>}
+        {onSale.length > 0 && <div className="tag-grid sale-grid">{onSale.slice(0, 4).map((p, i) => <GiftTag key={p.slug} product={p} index={i} />)}</div>}
       </div>
     </section>
   );
@@ -262,10 +283,9 @@ function Newsletter({ block }) {
 }
 
 export default function Home({ onReplayWelcome }) {
-  const [home] = useAsync(() => api.get('/content/home'), []);
-  const [cats] = useAsync(() => api.get('/categories'), []);
+  const [home, , reloadHome] = useAsync(() => api.get('/content/home'), []);
+  const [cats, , reloadCats] = useAsync(() => api.get('/categories'), []);
   const d = home.data;
-  const ch = d?.blocks?.['home.chapters'] ?? {};
   const { persona } = useApp();
   const { t } = useI18n();
   const treeProducts = useMemo(() => (d ? [...d.featured, ...d.bestsellers.filter((b) => !d.featured.some((f) => f.slug === b.slug))] : []), [d]);
@@ -281,19 +301,22 @@ export default function Home({ onReplayWelcome }) {
       {d?.banners?.length > 0 && (
         <div className="ribbon-banner" role="region" aria-label={t('home.announcements')}>
           <div className="ribbon-banner-track">
-            {[...d.banners, ...d.banners].map((b, i) => (
+            {d.banners.map((b, i) => (
               <Link key={i} to={b.ctaLink ?? '/shop'} className="ribbon-banner-item">✦ <b>{b.title}</b> <span>{b.subtitle}</span> <u>{b.ctaLabel}</u></Link>
             ))}
           </div>
         </div>
       )}
-      {!d ? <Loader /> : (
+      {home.error ? <div className="wrap"><LoadError error={home.error} onRetry={reloadHome} /></div> : !d ? <Loader /> : (
         <>
-          {cats.data && <Stalls categories={cats.data.categories} title={ch.stalls?.title} body={ch.stalls?.body} />}
-          <PopularGifts products={treeProducts.slice(0, 12)} limited={d.limited} />
+          {cats.error && <div className="wrap"><LoadError error={cats.error} onRetry={reloadCats} /></div>}
+          {cats.data && <Categories categories={cats.data.categories} />}
+          <PopularGifts products={treeProducts.slice(0, 8)} limited={d.limited} />
           <Offers campaigns={d.campaigns} onSale={d.onSale} />
-          <WishesWall />
+          <PioneerBand />
+          <HowItWorks />
           <MoreMagic />
+          <WishesWall />
           <Reviews />
           <Events events={d.events} />
           <Newsletter block={d.blocks?.['home.newsletter']} />

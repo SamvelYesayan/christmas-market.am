@@ -162,8 +162,6 @@ export default function Product() {
               <Price price={compare ?? unit} sale={compare != null ? unit : null} size="lg" />
               {p.rating && <span className="stars">{'★'.repeat(Math.round(p.rating))} <small className="muted">{p.rating}</small></span>}
             </div>
-            <p>{p.description}</p>
-
             {p.variants.length > 1 && (
               <fieldset className="seals">
                 <legend className="label">{optionKey ? t(`product.option_${optionKey}`) : t('product.choose')}</legend>
@@ -205,6 +203,8 @@ export default function Product() {
               </button>
             </div>
             <button className="link" onClick={() => setCartOpen(true)}>{t('product.viewSleigh')}</button>
+
+            <p className="product-desc">{p.description}</p>
 
             {p.story && (
               <aside className="product-story">

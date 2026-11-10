@@ -2,17 +2,27 @@
 // On sign-in the guest cart is merged into the user's cart.
 import { isProd } from '../config.js';
 import { randomToken, sha256 } from '../lib/crypto.js';
+import { isMobileClient } from '../middleware/auth.js';
 
 export const CART_COOKIE = 'mc_cart';
 
 const cartCookieOpts = { httpOnly: true, sameSite: 'lax', secure: isProd, path: '/', maxAge: 60 * 86400 * 1000 };
+
+// The native app keeps its guest-cart token in secure storage and sends it as X-Cart-Token (no cookies).
+export const CART_HEADER = 'x-cart-token';
+const guestToken = (req) => {
+  const cookie = req.cookies?.[CART_COOKIE];
+  if (cookie) return cookie;
+  const h = isMobileClient(req) ? req.get(CART_HEADER) : null;
+  return h && /^[A-Za-z0-9_-]{20,64}$/.test(h) ? h : null;
+};
 
 export async function findCart(db, req) {
   if (req.user) {
     const { rows } = await db.query('SELECT * FROM carts WHERE user_id = $1', [req.user.id]);
     return rows[0] ?? null;
   }
-  const token = req.cookies?.[CART_COOKIE];
+  const token = guestToken(req);
   if (!token) return null;
   const { rows } = await db.query('SELECT * FROM carts WHERE token_hash = $1', [sha256(token)]);
   return rows[0] ?? null;
@@ -30,13 +40,14 @@ export async function getOrCreateCart(db, req, res) {
   }
   const token = randomToken(24);
   const { rows } = await db.query('INSERT INTO carts (token_hash) VALUES ($1) RETURNING *', [sha256(token)]);
-  res.cookie(CART_COOKIE, token, cartCookieOpts);
+  if (isMobileClient(req)) res.set('X-Cart-Token', token);
+  else res.cookie(CART_COOKIE, token, cartCookieOpts);
   return rows[0];
 }
 
 /** Move guest cart items into the user's cart after login/registration. */
 export async function mergeGuestCart(db, req, res, userId) {
-  const token = req.cookies?.[CART_COOKIE];
+  const token = guestToken(req);
   if (!token) return;
   const { rows: [guest] } = await db.query('SELECT * FROM carts WHERE token_hash = $1', [sha256(token)]);
   res.clearCookie(CART_COOKIE, { ...cartCookieOpts, maxAge: undefined });

@@ -5,7 +5,7 @@ import { api, qs } from '../api/client.js';
 import { useApp } from '../state/AppState.jsx';
 import { money, storage } from '../lib.js';
 import { ProductVisual } from '../art/Art.jsx';
-import { Loader } from '../components/Common.jsx';
+import { LoadError, Loader } from '../components/Common.jsx';
 import { celebrate } from '../effects/celebrate.js';
 import { translate, useI18n } from '../i18n/index.jsx';
 
@@ -133,6 +133,8 @@ export default function Order() {
   }, [number]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!number) return <TrackForm />;
+  // 404 = wrong number or no access: offer the lookup form. Anything else is a real failure, so show it.
+  if (error && error.status !== 404) return <div className="wrap"><LoadError error={error} onRetry={() => window.location.reload()} /></div>;
   if (error) return <TrackForm />;
   if (!order) return <Loader label={t('order.finding')} />;
   return <OrderView order={order} fresh={fresh && order.status !== 'pending_payment'} />;

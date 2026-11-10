@@ -4,7 +4,7 @@ import { api } from '../../api/client.js';
 import { useApp } from '../../state/AppState.jsx';
 import { useAsync } from '../../lib.js';
 import Art from '../../art/Art.jsx';
-import { Loader } from '../../components/Common.jsx';
+import { Loader, LoadError } from '../../components/Common.jsx';
 import { GameFrame, SignInGate } from '../Games.jsx';
 import { useI18n } from '../../i18n/index.jsx';
 
@@ -13,11 +13,12 @@ const RARITY = { common: '#a9c7ff', uncommon: '#7fe0c4', rare: '#c8a2ff', legend
 export default function Mystery() {
   const { user, rewardCelebration, toast } = useApp();
   const { t } = useI18n();
-  const [state] = useAsync(() => api.get('/games/mystery'), [user?.id]);
+  const [state, , reload] = useAsync(() => api.get('/games/mystery'), [user?.id]);
   const [phase, setPhase] = useState('idle'); // idle | shaking | open
   const [result, setResult] = useState(null);
 
   if (state.loading) return <Loader />;
+  if (state.error) return <GameFrame title={t('games.mystery.title')}><LoadError error={state.error} onRetry={reload} /></GameFrame>;
   const already = state.data?.openedToday;
   const shown = result ?? (already ? { reward: state.data.lastReward } : null);
 
