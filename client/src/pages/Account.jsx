@@ -48,11 +48,11 @@ function Overview({ dash }) {
           <div>
             <span className="eyebrow">{t('account.identity')}</span>
             {house ? <><h3 className="script">{user.profile.identity?.magicalName ?? user.name}</h3><p className="muted">{house.name} · {house.animal}</p></>
-              : <><h3>{t('account.notSorted')}</h3><Link className="link" to="/academy">{t('account.visitAcademy')}</Link></>}
+              : <><h3>{t('account.identityTitle')}</h3><p className="muted">{t('account.notSorted')}</p><small className="muted">{t('account.notSortedBody')}</small><Link className="link" to="/academy">{t('account.visitAcademy')}</Link></>}
           </div>
         </div>
-        <div className="tile"><span className="eyebrow">{t('account.advent')}</span><b className="tile-num">{dash.advent.opened}/{dash.advent.total}</b><span className="bar"><span style={{ width: `${(dash.advent.opened / dash.advent.total) * 100}%` }} /></span><Link className="link" to="/advent">{t('account.open')}</Link></div>
-        <div className="tile"><span className="eyebrow">{t('account.atmosphere')}</span><b>{atmo ? t(`atmo.${atmo}`) : t('account.notChosen')}</b>{atmo && <small className="muted">{t(`atmo.${atmo}Blurb`)}</small>}</div>
+        <div className="tile"><span className="eyebrow">{t('account.advent')}</span><b className="tile-num">{t('account.adventDays', { n: dash.advent.opened, total: dash.advent.total })}</b><span className="bar"><span style={{ width: `${(dash.advent.opened / dash.advent.total) * 100}%` }} /></span><small className="muted">{t('account.adventBody')}</small><Link className="link" to="/advent">{t('account.adventOpen')}</Link></div>
+        <div className="tile"><span className="eyebrow">{t('account.atmosphere')}</span><b>{atmo ? t(`atmo.${atmo}`) : t('account.notChosen')}</b><small className="muted">{atmo ? t(`atmo.${atmo}Blurb`) : t('account.notChosenBody')}</small></div>
       </div>
       {dash.coupons.length > 0 && (
         <section><h3>{t('account.codes')}</h3><div className="coupons">{dash.coupons.map((c) => <CouponTicket key={c.code} c={c} />)}</div></section>
@@ -98,7 +98,7 @@ function Rewards({ dash }) {
   const { t, dateShort } = useI18n();
   return (
     <div className="stack">
-      <section><h3>{t('account.achievements')}</h3><Achievements dash={dash} /></section>
+      <section><h3>{t('account.achievements')}</h3><p className="muted">{t('account.achievementsBody')}</p><Achievements dash={dash} /></section>
       {dash.coupons.length > 0 && <div className="coupons">{dash.coupons.map((c) => <CouponTicket key={c.code} c={c} />)}</div>}
       <h3>{t('account.history')}</h3>
       {dash.rewards.length === 0 ? <p className="muted">{t('account.noRewards')}</p> : (

@@ -66,7 +66,8 @@ export function SleighDrawer() {
                   <path d="M20 106 h150 q18 0 16 -16" stroke="#f2c46d" strokeWidth="5" fill="none" strokeLinecap="round" />
                 </svg>
                 <p className="muted">{t('sleigh.impatient')}</p>
-                <button className="btn" onClick={() => { setCartOpen(false); nav('/shop'); }}>{t('common.visitMarket')}</button>
+                <button className="btn" onClick={() => { setCartOpen(false); nav('/shop'); }}>{t('cart.continue')}</button>
+                <p className="muted small-note">{t('cart.emptyNote')}</p>
               </div>
             ) : (
               <>
@@ -202,14 +203,16 @@ export function Footer({ onReplayIntro }) {
           </label>
         </div>
         <nav className="footer-cols" aria-label={t('footer.help')}>
+          <div><h4>{t('footer.intro')}</h4><Link to="/">{t('footer.home')}</Link></div>
           <div><h4>{t('footer.market')}</h4><Link to="/shop">{t('footer.allStalls')}</Link><Link to="/shop/limited">{t('footer.limited')}</Link><Link to="/gift-finder">{t('footer.finder')}</Link><Link to="/shop?onSale=true">{t('footer.offers')}</Link></div>
           <div><h4>{t('footer.magic')}</h4><Link to="/academy">{t('footer.academy')}</Link><Link to="/advent">{t('footer.advent')}</Link><Link to="/games">{t('footer.games')}</Link><Link to="/pioneer">{t('footer.pioneer')}</Link></div>
           <div><h4>{t('footer.help')}</h4><Link to="/track">{t('footer.track')}</Link><Link to="/info/delivery">{t('footer.delivery')}</Link><Link to="/info/privacy">{t('footer.privacy')}</Link><Link to="/info/terms">{t('footer.terms')}</Link></div>
         </nav>
         <div className="footer-letter">
           <h4>{t('footer.visit')}</h4>
-          <p className="muted">{t('footer.address')}<br />{t('footer.hours')}</p>
-          <a className="link" href="mailto:hello@christmas-market.am">hello@christmas-market.am</a>
+          <p className="muted">{t('footer.address')}<br />{t('footer.addressCity')}</p>
+          <p className="muted">{t('footer.hoursLabel')}<br />{t('footer.hours')}<br />{t('footer.hoursUntil')}</p>
+          <p className="muted">{t('footer.contact')}<br /><a className="link" href="mailto:hello@christmas-market.am">hello@christmas-market.am</a></p>
         </div>
       </div>
       <div className="footer-base wrap"><span>© {new Date().getFullYear()} {t('brand.name')} · christmas-market.am</span><span>{t('footer.prices')}</span></div>

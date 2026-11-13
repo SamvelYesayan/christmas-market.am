@@ -14,7 +14,8 @@
     "admin:create": "node --env-file-if-exists=.env scripts/create-admin.js",
     "backup": "node --env-file-if-exists=.env scripts/backup.js",
     "test": "node --env-file-if-exists=.env --test test/*.test.js",
-    "magical:mock": "node scripts/magical-mock.js"
+    "magical:mock": "node scripts/magical-mock.js",
+    "content:hy": "node --env-file-if-exists=.env scripts/apply-hy-content.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

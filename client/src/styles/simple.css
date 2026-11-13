@@ -225,3 +225,12 @@ main { overflow-x: clip; }
   html .nav-links, html[lang='hy'] .nav-links { order: 0; width: auto; margin: 0 auto; }
 }
 @media (min-width: 1101px) and (max-width: 1279px) { .brand-text { display: none; } .nav-links { flex: none; } }
+
+/* Approved Armenian content: extra text slots. */
+.hero-purpose { max-width: 46ch; margin: 0.6rem 0 0; font-weight: 600; color: var(--gold-hi); text-shadow: 0 2px 16px rgba(4, 8, 22, 0.75); }
+.more-tile > span:nth-child(2) { display: grid; gap: 0.2rem; }
+.more-cta { color: var(--gold); font-weight: 600; font-size: 0.9rem; margin-top: 0.2rem; }
+.cart-empty-eyebrow { display: block; text-align: center; margin-top: 1.5rem; }
+.footer-cols { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.footer-letter p { margin: 0 0 0.6rem; }
+@media (max-width: 1100px) { .footer-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

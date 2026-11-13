@@ -31,9 +31,10 @@ function Hero({ blocks }) {
       <div className="hero-layer hero-near"><Pines count={11} /></div>
       <div className="hero-ground" aria-hidden="true" />
       <motion.div className="hero-content wrap" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-        <p className="hero-greeting">{name ? <>{t(`greet.${timeGreeting()}`)}, <span className="script">{name}</span></> : t('home.heroPurpose')}</p>
+        {name && <p className="hero-greeting">{t(`greet.${timeGreeting()}`)}, <span className="script">{name}</span></p>}
         <h1 className="hero-title">{hero.title}</h1>
-        <p className="hero-sub">{name ? t('home.heroPurpose') : hero.subtitle}</p>
+        <p className="hero-sub">{hero.subtitle}</p>
+        <p className="hero-purpose">{t('home.heroPurpose')}</p>
         <div className="row hero-ctas">
           <Link className="btn" to="/shop">{t('home.heroCta')}</Link>
           <Link className="link hero-finder" to="/gift-finder">{t('home.ctaFinder')} →</Link>
@@ -129,9 +130,9 @@ function HowItWorks() {
   return (
     <section className="section">
       <div className="wrap">
-        <Chapter title={t('home.howTitle')} />
+        <Chapter title={t('home.howTitle')}>{t('home.howBody')}</Chapter>
         <ol className="how-steps">
-          {[1, 2, 3].map((n) => <li key={n}><span className="how-num">{n}</span><b>{t(`home.how${n}t`)}</b><span className="muted">{t(`home.how${n}b`)}</span></li>)}
+          {[1, 2, 3].map((n) => <li key={n}><span className="how-num">{String(n).padStart(2, '0')}</span><b>{t(`home.how${n}t`)}</b><span className="muted">{t(`home.how${n}b`)}</span></li>)}
         </ol>
       </div>
     </section>
@@ -142,21 +143,20 @@ function HowItWorks() {
 function MoreMagic() {
   const { t } = useI18n();
   const tiles = [
-    { to: '/advent', art: { type: 'door', c1: '#0f6b4f', c2: '#f2c46d' }, title: t('nav.advent'), body: t('nav.adventHint') },
-    { to: '/gift-finder', art: { type: 'giftbox', c1: '#f2c46d', c2: '#c8102e' }, title: t('nav.finder'), body: t('home.moreFinder') },
-    { to: '/games', art: { type: 'star', c1: '#2a4fa8', c2: '#f2c46d' }, title: t('home.moreFunTitle'), body: t('home.moreFun') },
-    { to: '/academy', art: { type: 'wand', c1: '#e8dcc4', c2: '#a9c7ff' }, title: t('nav.academy'), body: t('home.moreAcademy') },
+    { to: '/advent', art: { type: 'door', c1: '#0f6b4f', c2: '#f2c46d' }, title: t('home.funAdventT'), body: t('home.funAdventB'), cta: t('home.funAdventC') },
+    { to: '/gift-finder', art: { type: 'giftbox', c1: '#f2c46d', c2: '#c8102e' }, title: t('home.funFinderT'), body: t('home.funFinderB'), cta: t('home.funFinderC') },
+    { to: '/games', art: { type: 'star', c1: '#2a4fa8', c2: '#f2c46d' }, title: t('home.funGamesT'), body: t('home.funGamesB'), cta: t('home.funGamesC') },
+    { to: '/academy', art: { type: 'wand', c1: '#e8dcc4', c2: '#a9c7ff' }, title: t('home.funAcademyT'), body: t('home.funAcademyB'), cta: t('home.funAcademyC') },
   ];
   return (
     <section className="section">
       <div className="wrap">
-        <Chapter title={t('home.moreTitle')} />
+        <Chapter title={t('home.moreTitle')}>{t('home.moreBody')}</Chapter>
         <div className="more-magic">
           {tiles.map((x) => (
             <Link key={x.to} to={x.to} className="more-tile">
               <span className="more-art"><Art art={x.art} glow={false} /></span>
-              <span><b>{x.title}</b><small className="muted">{x.body}</small></span>
-              <span className="more-go" aria-hidden="true">→</span>
+              <span><b>{x.title}</b><small className="muted">{x.body}</small><span className="more-cta">→ {x.cta}</span></span>
             </Link>
           ))}
         </div>
@@ -266,7 +266,7 @@ function Newsletter({ block }) {
         <div className="mailbox panel pad">
           <div className="mailbox-art" aria-hidden="true"><Art art={{ type: 'scroll', c1: '#f3e6c8', c2: '#c8102e' }} /></div>
           <div>
-            <Chapter title={block?.title}>{block?.body}</Chapter>
+            <Chapter eyebrow={t('home.lettersEyebrow')} title={block?.title}>{block?.body}</Chapter>
             {sent ? (
               <p className="form-ok">{t('home.letterSent')}</p>
             ) : (

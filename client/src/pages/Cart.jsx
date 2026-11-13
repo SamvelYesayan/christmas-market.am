@@ -68,7 +68,7 @@ export default function Cart() {
   };
   if (!cart.items.length && cartError) return <div className="wrap"><LoadError error={cartError} onRetry={() => refreshCart().catch(() => {})} /></div>;
   if (!cart.items.length) {
-    return <div className="wrap"><Empty art={{ type: 'sleigh', c1: '#c8102e' }} title={t('cart.empty')}><p className="muted">{t('cart.emptyBody')}</p><Link className="btn" to="/shop">{t('common.visitMarket')}</Link></Empty></div>;
+    return <div className="wrap"><span className="eyebrow cart-empty-eyebrow">{t('cart.emptyEyebrow')}</span><Empty art={{ type: 'sleigh', c1: '#c8102e' }} title={t('cart.empty')}><p className="muted">{t('cart.emptyBody')}</p><Link className="btn" to="/shop">{t('cart.continue')}</Link><p className="muted small-note">{t('cart.emptyNote')}</p></Empty></div>;
   }
   return (
     <div className="wrap cart-page">
